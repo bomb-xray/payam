@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>پیام</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ================= صفحه‌ی ورود ================= -->
+  <div id="login" class="login hidden">
+    <div class="login-card">
+      <div class="logo">💬</div>
+      <h1>پیام</h1>
+      <p class="sub">پیام‌رسان با احراز هویت تلگرام</p>
+
+      <div id="login-step1">
+        <ol class="steps">
+          <li>بات <b id="bot-username" dir="ltr">@…</b> را در تلگرام پیدا و استارت کنید</li>
+          <li>دستور <code dir="ltr">/id</code> را بفرستید تا آی‌دی عددی‌تان را بگیرید</li>
+          <li>آی‌دی عددی را این‌جا وارد کنید و کد را دریافت کنید</li>
+        </ol>
+        <input id="tg-id" inputmode="numeric" autocomplete="off" placeholder="آی‌دی عددی تلگرام شما" dir="ltr" />
+        <button id="btn-request" class="primary">دریافت کد ورود 🔑</button>
+        <p id="login-error" class="error"></p>
+      </div>
+
+      <div id="login-step2" class="hidden">
+        <p class="sent-hint">✅ کد ۵ رقمی به تلگرام شما ارسال شد</p>
+        <a id="deep-link" href="#" target="_blank" rel="noopener" class="deeplink">
+          ورود سریع با یک کلیک (باز کردن تلگرام)
+        </a>
+        <p class="or">— یا کد را دستی وارد کنید —</p>
+        <input id="code" inputmode="numeric" maxlength="5" autocomplete="one-time-code" placeholder="–––––" dir="ltr" />
+        <button id="btn-verify" class="primary">ورود</button>
+        <p class="timer">اعتبار کد: <span id="countdown" dir="ltr"></span></p>
+        <p id="verify-error" class="error"></p>
+        <button id="btn-back" class="link">→ بازگشت</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= برنامه ================= -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <h2>💬 پیام</h2>
+        <span id="conn-state" class="conn" title="وضعیت اتصال"></span>
+      </header>
+      <div class="search-wrap">
+        <input id="search" placeholder="جستجو…" autocomplete="off" />
+      </div>
+      <div id="user-list" class="user-list"></div>
+      <footer class="sidebar-footer">
+        <div class="me">
+          <div class="avatar" id="me-avatar"></div>
+          <div class="me-info">
+            <div id="me-name" class="me-name"></div>
+            <div id="me-username" class="dim"></div>
+          </div>
+        </div>
+        <button id="btn-logout" class="icon-btn" title="خروج از حساب">🚪</button>
+      </footer>
+    </aside>
+
+    <main class="chat">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">💬</div>
+        <p>یک گفتگو را از فهرست انتخاب کنید</p>
+      </div>
+
+      <div id="chat-view" class="chat-view hidden">
+        <header class="chat-header">
+          <button id="btn-back-chat" class="icon-btn back-btn" title="بازگشت">→</button>
+          <div class="avatar" id="peer-avatar"></div>
+          <div class="peer-meta">
+            <div id="peer-name" class="peer-name"></div>
+            <div id="peer-status" class="dim"></div>
+          </div>
+        </header>
+        <div id="messages" class="messages"></div>
+        <footer class="composer">
+          <textarea id="input" rows="1" placeholder="پیام…" maxlength="4096"></textarea>
+          <button id="btn-send" class="send-btn" title="ارسال">➤</button>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
