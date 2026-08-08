@@ -233,6 +233,26 @@ export function markRead(me: number, peer: number): number {
   return info.changes;
 }
 
+export function updateUserName(id: number, name: string): User | undefined {
+  const trimmed = name.trim().replace(/\s+/g, " ").slice(0, 64);
+  if (trimmed.length < 1) return undefined;
+  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(trimmed, id);
+  return getUserById(id);
+}
+
+export function listSessionsByUser(userId: number): Array<{ token_hash: string; created_at: number }> {
+  return db
+    .prepare<[number]>("SELECT token_hash, created_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC")
+    .all(userId) as Array<{ token_hash: string; created_at: number }>;
+}
+
+export function deleteSessionsExcept(userId: number, keepHash: string): number {
+  const info = db
+    .prepare<[number, string]>("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?")
+    .run(userId, keepHash);
+  return info.changes;
+}
+
 export function unreadCounts(me: number): Record<number, number> {
   const rows = db
     .prepare<[number]>(

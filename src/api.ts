@@ -16,8 +16,12 @@ import {
   listUsers,
   getHistory,
   markRead,
+  updateUserName,
+  listSessionsByUser,
+  deleteSessionsExcept,
   User,
 } from "./db";
+import crypto from "crypto";
 import { announceUser, notifyUser, isOnline } from "./ws";
 
 export const api = express.Router();
@@ -43,13 +47,16 @@ function authed(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-function publicUser(u: User) {
+function publicUser(u: User, extra: Record<string, unknown> = {}) {
   return {
     id: u.id,
+    tg_id: u.tg_id,
     name: u.name,
     username: u.username,
     online: isOnline(u.id),
     last_seen: u.last_seen,
+    created_at: u.created_at,
+    ...extra,
   };
 }
 
@@ -167,8 +174,43 @@ api.get("/users", authed, (req, res) => {
   const me: User = (req as any).user;
   res.json({
     ok: true,
-    users: listUsers().filter((u) => u.id !== me.id).map(publicUser),
+    users: listUsers().filter((u) => u.id !== me.id).map((u) => publicUser(u)),
   });
+});
+
+api.put("/me", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name || name.length < 2 || name.length > 64) {
+    return fail(res, 400, "bad_name", "نام باید بین ۲ تا ۶۴ کاراکتر باشد.");
+  }
+  const updated = updateUserName(me.id, name);
+  if (!updated) return fail(res, 400, "bad_name", "نام نامعتبر است.");
+  // به همه اطلاع بده نام عوض شده
+  announceUser(updated);
+  res.json({ ok: true, user: publicUser(updated) });
+});
+
+api.get("/sessions", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const token = bearer(req);
+  const curHash = token ? crypto.createHash("sha256").update(token).digest("hex") : "";
+  const sessions = listSessionsByUser(me.id).map((s) => ({
+    id: s.token_hash,
+    current: s.token_hash === curHash,
+    created_at: s.created_at,
+    preview: s.token_hash.slice(0, 12),
+  }));
+  res.json({ ok: true, sessions });
+});
+
+api.post("/sessions/revoke-others", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const token = bearer(req);
+  if (!token) return fail(res, 401, "unauthorized");
+  const curHash = crypto.createHash("sha256").update(token).digest("hex");
+  const count = deleteSessionsExcept(me.id, curHash);
+  res.json({ ok: true, revoked: count });
 });
 
 api.get("/messages", authed, (req, res) => {
