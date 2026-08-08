@@ -234,6 +234,71 @@ async function enterApp(){
   renderSidebar();
   connectWs();
   refreshSettingsData();
+  startMessagePolling();
+}
+function startMessagePolling(){
+  // فال‌بک ابری — هر 4 ثانیه چک کن آیا پیام جدیدی اومده (اگر وب‌سوکت قطع باشه یا پیام جا بیفته)
+  setInterval(async()=>{
+    try{
+      // اگه تب مخفیه یا کاربر لاگین نیست، نکن
+      if(!state.me || !state.token) return;
+      // فقط اگر وب‌سوکت قطع باشه یا 5 ثانیه آخر پیامی نیومده، پول کن — ولی برای سادگی همیشه چک می‌کنیم چون سبک هست
+      const conv=await api("/conversations");
+      let needRender=false;
+      // آپدیت lastMsg های شخصی
+      for(const [k,v] of Object.entries(conv.last)){
+        const id=Number(k);
+        if(!v) continue;
+        if(v.group_id){
+          const existing=state.lastGroupMsg.get(v.group_id);
+          if(!existing || v.ts>existing.ts){
+            state.lastGroupMsg.set(v.group_id,{text:v.text, ts:v.ts, from:v.sender, out:v.sender===state.me.id});
+            needRender=true;
+            // اگه همین گروه بازه و پیامش جدیدتر از آخرین پیام ماست، تاریخچه رو رفرش کن
+            if(state.group===v.group_id && (!state.msgs.length || v.ts>state.msgs[state.msgs.length-1].ts)){
+              try{
+                const r=await api(`/groups/${v.group_id}/messages`);
+                // فقط پیام‌هایی که نداریم اضافه کن
+                for(const nm of r.messages){
+                  if(!state.msgs.some(m=>m.id===nm.id)){
+                    state.msgs.push(nm);
+                    appendBubble(nm);
+                  }
+                }
+                scrollDown();
+              }catch{}
+            }
+          }
+        } else if(id>0){
+          const existing=state.lastMsg.get(id);
+          if(!existing || v.ts>existing.ts){
+            state.lastMsg.set(id,{text:v.text, ts:v.ts, out:v.sender===state.me.id});
+            needRender=true;
+            if(state.peer===id && (!state.msgs.length || v.ts>state.msgs[state.msgs.length-1].ts)){
+              try{
+                const r=await api(`/messages?with=${id}`);
+                for(const nm of r.messages){
+                  if(!state.msgs.some(m=>m.id===nm.id)){
+                    state.msgs.push(nm);
+                    appendBubble(nm);
+                  }
+                }
+                scrollDown();
+              }catch{}
+            }
+          }
+        } else if(id<0){
+          const gid=-id;
+          const existing=state.lastGroupMsg.get(gid);
+          if(!existing || v.ts>existing.ts){
+            state.lastGroupMsg.set(gid,{text:v.text, ts:v.ts, from:v.sender, out:v.sender===state.me.id});
+            needRender=true;
+          }
+        }
+      }
+      if(needRender) renderSidebar();
+    }catch(e){ /* ignore */ }
+  }, 4000);
 }
 function setConn(on){ const el=$("conn-state"); el.classList.toggle("on", on===true); el.classList.toggle("off", on===false); }
 function connectWs(){
@@ -518,7 +583,8 @@ function renderMessages(){
 function buildBubble(m){
   const out=m.sender===state.me.id;
   const isGroup=!!m.group_id || !!m.group;
-  const el=document.createElement("div"); el.className=`bubble ${out?"out":"in"}`+(isSavedId(m.recipient)&&out?" saved-self":"");
+  const isPending=m.id===-1;
+  const el=document.createElement("div"); el.className=`bubble ${out?"out":"in"}`+(isSavedId(m.recipient)&&out?" saved-self":"")+(isPending?" pending":"");
   if(isGroup && !out){
     const senderName=document.createElement("span"); senderName.className="sender-name";
     const user=state.users.get(m.sender); senderName.textContent=user?user.name:`کاربر ${m.sender}`;
@@ -527,8 +593,14 @@ function buildBubble(m){
   const text=document.createElement("span"); text.textContent=m.text;
   const meta=document.createElement("span"); meta.className="meta";
   const time=document.createElement("span"); time.textContent=fmtTime(m.ts,state.settings.showSeconds); meta.appendChild(time);
-  if(out){ const ticks=document.createElement("span"); ticks.className="ticks"+(m.read_at?" read":""); ticks.textContent=m.read_at?"✓✓":"✓"; meta.appendChild(ticks); }
-  if(isGroup){ const cloud=document.createElement("span"); cloud.textContent="☁️"; cloud.title="ذخیره ابری"; cloud.style.marginRight="4px"; meta.prepend(cloud); }
+  if(out){
+    const ticks=document.createElement("span"); ticks.className="ticks"+(m.read_at && !isPending?" read":"")+(isPending?" pending-spin":"");
+    ticks.textContent=isPending?"⏳":(m.read_at?"✓✓":"✓");
+    ticks.title=isPending?"در حال ارسال...":"ارسال شد";
+    meta.appendChild(ticks);
+  }
+  // آیکون ابری فقط برای گروه — ولی اگر کاربر نخواست، حذف کن
+  if(isGroup && !out){ /* دیگر ابری بزرگ نشان نده */ }
   el.append(text,meta); return el;
 }
 function appendBubble(m){ $("messages").appendChild(buildBubble(m)); }

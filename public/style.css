@@ -254,13 +254,17 @@ body.no-pattern .chat { background-image: none; }
 .bubble.out .meta { color: rgba(255,255,255,0.90); text-shadow: 0 1px 1px rgba(0,0,0,0.25); }
 [data-theme="light"] .bubble.out .meta { color: rgba(0,60,100,0.65); text-shadow:none; }
 [data-theme="light"] .bubble.in { color: #111; }
-.bubble.pending { opacity: 0.88; filter: saturate(0.85); position: relative; }
-.bubble.pending::before{
-  content:"☁️ در حال ذخیره ابری…";
-  position:absolute; top:-18px; left:8px; font-size:0.68rem;
-  color: var(--dim); background: var(--panel-2); padding:2px 8px;
-  border-radius:10px; border:1px solid var(--border-2);
-  direction:rtl; white-space:nowrap;
+.bubble.pending {
+  opacity: 0.78;
+  transform: scale(0.99);
+}
+.bubble.pending .ticks {
+  display: inline-block;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .bubble .meta {
   display: inline-flex; gap: 5px; font-size: 0.69rem; color: rgba(255,255,255,0.65);
