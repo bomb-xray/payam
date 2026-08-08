@@ -9,25 +9,24 @@
 </head>
 <body>
 
-  <!-- صفحه‌ی ورود -->
   <div id="login" class="login hidden">
     <div class="login-card">
       <div class="logo">🌊</div>
       <h1 dir="ltr">Furina mind</h1>
-      <p class="sub">پیام‌رسان با احراز هویت تلگرام</p>
+      <p class="sub">پیام‌رسان ابری با احراز هویت تلگرام — گروه، کانال، مخاطبین</p>
       <div id="login-step1">
         <ol class="steps">
-          <li>بات <b id="bot-username" dir="ltr">@…</b> را در تلگرام پیدا و استارت کنید</li>
-          <li>دستور <code dir="ltr">/id</code> را بفرستید تا آی‌دی عددی‌تان را بگیرید</li>
-          <li>آی‌دی عددی را این‌جا وارد کنید و کد را دریافت کنید</li>
+          <li>بات <b id="bot-username" dir="ltr">@…</b> را استارت کن</li>
+          <li>دستور <code dir="ltr">/id</code> را بفرست</li>
+          <li>آی‌دی عددی رو این‌جا وارد کن</li>
         </ol>
-        <input id="tg-id" inputmode="numeric" autocomplete="off" placeholder="آی‌دی عددی تلگرام شما" dir="ltr" />
+        <input id="tg-id" inputmode="numeric" autocomplete="off" placeholder="آی‌دی عددی تلگرام" dir="ltr" />
         <button id="btn-request" class="primary">دریافت کد ورود 🔑</button>
         <p id="login-error" class="error"></p>
       </div>
       <div id="login-step2" class="hidden">
         <p class="sent-hint">✅ کد ۵ رقمی به تلگرام شما ارسال شد</p>
-        <a id="deep-link" href="#" target="_blank" rel="noopener" class="deeplink">ورود سریع با یک کلیک (باز کردن تلگرام)</a>
+        <a id="deep-link" href="#" target="_blank" rel="noopener" class="deeplink">ورود سریع با یک کلیک</a>
         <p class="or">— یا کد را دستی وارد کنید —</p>
         <input id="code" inputmode="numeric" maxlength="5" autocomplete="one-time-code" placeholder="–––––" dir="ltr" />
         <button id="btn-verify" class="primary">ورود</button>
@@ -38,17 +37,32 @@
     </div>
   </div>
 
-  <!-- برنامه -->
   <div id="app" class="app hidden">
     <aside class="sidebar">
       <header class="sidebar-header">
         <h2 dir="ltr">🌊 Furina mind</h2>
-        <span id="conn-state" class="conn" title="وضعیت اتصال"></span>
+        <div style="display:flex; gap:6px; align-items:center">
+          <span id="conn-state" class="conn" title="وضعیت اتصال"></span>
+          <button id="btn-new" class="icon-btn" title="ساخت گروه/کانال/مخاطب" style="font-size:1rem">➕</button>
+        </div>
       </header>
-      <div class="search-wrap">
-        <input id="search" placeholder="جستجو…" autocomplete="off" />
+
+      <div class="sidebar-tabs">
+        <button data-tab="chats" class="sidebar-tab active">💬 چت‌ها</button>
+        <button data-tab="groups" class="sidebar-tab">👥 گروه‌ها</button>
+        <button data-tab="channels" class="sidebar-tab">📢 کانال</button>
+        <button data-tab="contacts" class="sidebar-tab">📇 مخاطبین</button>
       </div>
+
+      <div class="search-wrap">
+        <input id="search" placeholder="جستجو در چت‌ها، گروه‌ها، مخاطبین…" autocomplete="off" />
+      </div>
+
       <div id="user-list" class="user-list"></div>
+      <div id="group-list" class="user-list hidden"></div>
+      <div id="channel-list" class="user-list hidden"></div>
+      <div id="contact-list" class="user-list hidden"></div>
+
       <footer class="sidebar-footer">
         <div class="me">
           <div class="avatar" id="me-avatar"></div>
@@ -67,54 +81,153 @@
     <main class="chat">
       <div id="empty-state" class="empty-state">
         <div class="empty-icon">🌊</div>
-        <p>یک گفتگو را از فهرست انتخاب کنید تا پیام‌هایتان را ببینید</p>
-        <p class="dim">پیام‌های شما رمزگذاری شده و مستقیم ذخیره می‌شوند</p>
-        <p style="margin-top:12px"><kbd>Enter</kbd> ارسال • <kbd>Shift+Enter</kbd> خط جدید</p>
+        <p>به Furina mind خوش اومدی — پیام‌رسان ابری</p>
+        <p class="dim">گروه بساز، کانال بزن، مخاطبینت رو از بات تلگرام ایمپورت کن</p>
+        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center">
+          <kbd>Enter</kbd> ارسال
+          <kbd>Shift+Enter</kbd> خط جدید
+          <span class="dim">/</span>
+          <span class="link-chip" id="empty-contacts-hint">📇 ایمپورت از بات</span>
+        </div>
       </div>
+
       <div id="chat-view" class="chat-view hidden">
         <header class="chat-header">
           <button id="btn-back-chat" class="icon-btn back-btn" title="بازگشت">→</button>
           <div class="avatar" id="peer-avatar"></div>
-          <div class="peer-meta">
+          <div class="peer-meta" style="flex:1; min-width:0">
             <div id="peer-name" class="peer-name"></div>
-            <div id="peer-status" class="dim"></div>
+            <div id="peer-status" class="dim" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis"></div>
           </div>
-          <div style="margin-right:auto; display:flex; gap:4px">
-            <button id="btn-chat-info" class="icon-btn" title="اطلاعات چت">ℹ️</button>
+          <div style="display:flex; gap:4px">
+            <button id="btn-chat-info" class="icon-btn" title="اطلاعات">ℹ️</button>
+            <button id="btn-group-invite" class="icon-btn hidden" title="لینک دعوت">🔗</button>
+            <button id="btn-group-members" class="icon-btn hidden" title="اعضا">👥</button>
           </div>
         </header>
         <div id="messages" class="messages"></div>
-        <footer class="composer">
+        <footer class="composer" id="composer">
           <div class="input-wrap">
             <textarea id="input" rows="1" placeholder="پیام بنویسید…" maxlength="4096"></textarea>
           </div>
-          <button id="btn-send" class="send-btn" title="ارسال (Enter)">➤</button>
+          <button id="btn-send" class="send-btn" title="ارسال">➤</button>
         </footer>
+        <div id="readonly-bar" class="hidden" style="padding:12px; text-align:center; background:var(--panel); border-top:1px solid var(--border); color:var(--dim); font-size:0.85rem">
+          🔒 فقط ادمین‌های کانال می‌توانند پیام بفرستند
+        </div>
       </div>
     </main>
   </div>
 
-  <!-- پنل تنظیمات حرفه‌ای -->
+  <!-- مودال ساخت -->
+  <div id="create-modal" class="settings-modal hidden">
+    <div class="settings-backdrop" id="create-backdrop"></div>
+    <div class="settings-panel" style="max-width:520px; height:auto; max-height:84vh">
+      <header class="settings-header">
+        <h3 id="create-title">ساخت</h3>
+        <button id="btn-close-create" class="icon-btn">✕</button>
+      </header>
+      <div class="settings-content" style="background:var(--panel)">
+        <div id="create-group-form">
+          <div class="field"><label>نام</label><input id="cg-name" placeholder="مثلاً: دوستان برنامه‌نویس" maxlength="80" /></div>
+          <div class="field"><label>توضیح (اختیاری)</label><input id="cg-desc" placeholder="موضوع گروه..." maxlength="500" /></div>
+          <div class="field">
+            <label>نوع</label>
+            <select id="cg-type" style="width:100%; padding:10px; border-radius:10px; background:var(--bg); color:var(--text); border:1px solid var(--border-2)">
+              <option value="group">👥 گروه — همه می‌تونن چت کنن</option>
+              <option value="channel">📢 کانال — فقط ادمین پست می‌ذاره</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>افزودن اعضا از مخاطبین/کاربران</label>
+            <div id="cg-members" style="max-height:180px; overflow-y:auto; background:var(--bg); border:1px solid var(--border-2); border-radius:10px; padding:8px"></div>
+            <div class="field-hint">حداقل خودت هستی، بقیه اختیاریه — بعداً هم می‌تونی اضافه کنی</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:14px">
+            <button class="btn btn-primary" id="btn-do-create">ساخت</button>
+            <button class="btn btn-ghost" id="btn-cancel-create">انصراف</button>
+            <span id="create-status" class="dim" style="align-self:center"></span>
+          </div>
+        </div>
+
+        <div id="create-contact-form" class="hidden">
+          <div class="field"><label>افزودن مخاطب</label>
+            <div style="display:flex; gap:8px">
+              <input id="cc-tgid" placeholder="TG ID عددی" style="flex:1" inputmode="numeric" />
+              <button class="btn btn-ghost" id="btn-cc-by-tgid">افزودن با ID</button>
+            </div>
+          </div>
+          <div class="field">
+            <div style="display:flex; gap:8px">
+              <input id="cc-username" placeholder="@username" style="flex:1" dir="ltr" />
+              <button class="btn btn-ghost" id="btn-cc-by-username">افزودن با یوزرنیم</button>
+            </div>
+          </div>
+          <div class="field">
+            <div style="display:flex; gap:8px">
+              <input id="cc-phone" placeholder="شماره مثل +989..." style="flex:1" dir="ltr" />
+              <input id="cc-name" placeholder="نام" style="flex:1" />
+            </div>
+            <button class="btn btn-ghost" id="btn-cc-by-phone" style="margin-top:8px">افزودن با شماره</button>
+          </div>
+          <div class="divider"></div>
+          <div style="background:var(--bg); border:1px dashed var(--border-2); border-radius:12px; padding:12px; line-height:1.8; font-size:0.85rem; color:var(--text-2)">
+            📇 <b>ایمپورت اصلی از بات تلگرام:</b><br>
+            1. برو تو بات <b id="cc-bot-username" dir="ltr">@…</b><br>
+            2. دکمه‌ی <code>📇 اشتراک مخاطب</code> رو بزن و مخاطب رو شیر کن<br>
+            3. یا دستور <code>/contacts</code> رو بزن تا ببینی کیا بات رو استارت کردن<br><br>
+            به محض شیر کردن، مخاطب توی همین لیست میاد ✅
+          </div>
+          <div style="margin-top:12px"><span id="contact-create-status" class="dim"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال اعضا -->
+  <div id="members-modal" class="settings-modal hidden">
+    <div class="settings-backdrop" id="members-backdrop"></div>
+    <div class="settings-panel" style="max-width:480px; height:auto; max-height:80vh">
+      <header class="settings-header"><h3 id="members-title">اعضا</h3><button id="btn-close-members" class="icon-btn">✕</button></header>
+      <div class="settings-content" style="background:var(--panel)">
+        <div id="members-list"></div>
+        <div class="divider"></div>
+        <div class="field">
+          <label>افزودن عضو جدید</label>
+          <div style="display:flex; gap:8px">
+            <input id="add-member-id" placeholder="ID کاربر" inputmode="numeric" style="flex:1" />
+            <button class="btn btn-primary" id="btn-add-member">افزودن</button>
+          </div>
+          <div class="field-hint">آی‌دی عددی کاربر رو بزن (از تب مخاطبین یا چت‌ها بردار)</div>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px">
+          <button class="btn btn-danger" id="btn-leave-group">🚪 خروج از گروه</button>
+          <button class="btn btn-ghost" id="btn-copy-invite">🔗 کپی لینک دعوت</button>
+        </div>
+        <div id="members-status" class="dim" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- تنظیمات -->
   <div id="settings-modal" class="settings-modal hidden">
     <div class="settings-backdrop" id="settings-backdrop"></div>
     <div class="settings-panel">
       <header class="settings-header">
         <h3>تنظیمات پیشرفته</h3>
-        <button id="btn-close-settings" class="icon-btn" title="بستن">✕</button>
+        <button id="btn-close-settings" class="icon-btn">✕</button>
       </header>
       <div class="settings-body">
         <nav class="settings-nav" id="settings-nav">
           <button data-tab="profile" class="settings-nav-item active">👤 پروفایل</button>
-          <button data-tab="appearance" class="settings-nav-item">🎨 ظاهر و تم</button>
-          <button data-tab="chats" class="settings-nav-item">💬 گفتگو و ارسال</button>
-          <button data-tab="notifications" class="settings-nav-item">🔔 اعلان‌ها</button>
-          <button data-tab="privacy" class="settings-nav-item">🔒 حریم و نشست‌ها</button>
-          <button data-tab="data" class="settings-nav-item">🗄️ داده و ذخیره</button>
-          <button data-tab="about" class="settings-nav-item">ℹ️ درباره Furina</button>
+          <button data-tab="appearance" class="settings-nav-item">🎨 ظاهر</button>
+          <button data-tab="chats" class="settings-nav-item">💬 چت</button>
+          <button data-tab="notifications" class="settings-nav-item">🔔 اعلان</button>
+          <button data-tab="privacy" class="settings-nav-item">🔒 حریم</button>
+          <button data-tab="data" class="settings-nav-item">🗄️ داده</button>
+          <button data-tab="about" class="settings-nav-item">ℹ️ درباره</button>
         </nav>
         <div class="settings-content">
-
-          <!-- پروفایل -->
           <div class="settings-tab active" data-tab-content="profile">
             <div class="settings-section">
               <div class="profile-head">
@@ -128,177 +241,88 @@
                 </div>
               </div>
               <div class="settings-card">
-                <div class="field">
-                  <label>نام نمایشی</label>
-                  <input id="set-name-input" placeholder="نام شما" maxlength="64" />
-                  <div class="field-hint">این نام برای بقیه نمایش داده می‌شود. بین ۲ تا ۶۴ کاراکتر.</div>
-                </div>
-                <div style="display:flex; gap:8px; margin-top:10px">
-                  <button class="btn btn-primary" id="btn-save-name">💾 ذخیره نام</button>
-                  <span id="set-name-status" class="dim" style="align-self:center"></span>
-                </div>
+                <div class="field"><label>نام نمایشی</label><input id="set-name-input" placeholder="نام شما" maxlength="64" /><div class="field-hint">بین ۲ تا ۶۴ کاراکتر</div></div>
+                <div style="display:flex; gap:8px; margin-top:10px"><button class="btn btn-primary" id="btn-save-name">💾 ذخیره</button><span id="set-name-status" class="dim" style="align-self:center"></span></div>
               </div>
             </div>
             <div class="settings-section">
-              <h4><span class="sec-icon">📊</span> اطلاعات حساب</h4>
+              <h4><span class="sec-icon">📊</span> اطلاعات</h4>
               <div class="info-grid">
-                <div class="info-box"><div class="label">آیدی داخلی</div><div class="value" id="set-info-id">—</div></div>
-                <div class="info-box"><div class="label">تلگرام TG ID</div><div class="value" id="set-info-tgid">—</div></div>
-                <div class="info-box"><div class="label">نام کاربری</div><div class="value" id="set-info-username">—</div></div>
-                <div class="info-box"><div class="label">تاریخ عضویت</div><div class="value" id="set-info-joined">—</div></div>
+                <div class="info-box"><div class="label">آیدی</div><div class="value" id="set-info-id">—</div></div>
+                <div class="info-box"><div class="label">TG ID</div><div class="value" id="set-info-tgid">—</div></div>
+                <div class="info-box"><div class="label">یوزرنیم</div><div class="value" id="set-info-username">—</div></div>
+                <div class="info-box"><div class="label">عضویت</div><div class="value" id="set-info-joined">—</div></div>
               </div>
             </div>
           </div>
-
-          <!-- ظاهر -->
           <div class="settings-tab" data-tab-content="appearance">
             <div class="settings-section">
               <h4><span class="sec-icon">🌓</span> تم</h4>
               <div class="theme-grid" id="theme-grid">
-                <div class="theme-card selected" data-theme="dark">
-                  <div class="theme-preview dark">🌙</div>
-                  <div class="theme-name">تیره — پیش‌فرض</div>
-                  <div class="dim" style="font-size:0.75rem;margin-top:4px">محبوب، چشم‌نواز</div>
-                </div>
-                <div class="theme-card" data-theme="amoled">
-                  <div class="theme-preview amoled">🖤</div>
-                  <div class="theme-name">AMOLED</div>
-                  <div class="dim" style="font-size:0.75rem;margin-top:4px">مشکی خالص</div>
-                </div>
-                <div class="theme-card" data-theme="light">
-                  <div class="theme-preview light">☀️</div>
-                  <div class="theme-name">روشن</div>
-                  <div class="dim" style="font-size:0.75rem;margin-top:4px">برای روز</div>
-                </div>
+                <div class="theme-card selected" data-theme="dark"><div class="theme-preview dark">🌙</div><div class="theme-name">تیره</div></div>
+                <div class="theme-card" data-theme="amoled"><div class="theme-preview amoled">🖤</div><div class="theme-name">AMOLED</div></div>
+                <div class="theme-card" data-theme="light"><div class="theme-preview light">☀️</div><div class="theme-name">روشن</div></div>
               </div>
             </div>
             <div class="settings-section">
               <h4><span class="sec-icon">🎨</span> رنگ تأکیدی</h4>
-              <div class="settings-card">
-                <div class="row-desc" style="margin-bottom:10px">رنگ اصلی برنامه و حباب‌های ارسالی را انتخاب کنید:</div>
-                <div class="accent-row" id="accent-row">
-                  <!-- JS fills -->
-                </div>
-              </div>
+              <div class="settings-card"><div class="accent-row" id="accent-row"></div></div>
             </div>
             <div class="settings-section">
-              <h4><span class="sec-icon">🔤</span> اندازه فونت پیام</h4>
+              <h4><span class="sec-icon">🔤</span> فونت</h4>
               <div class="settings-card">
-                <div class="font-size-control">
-                  <span>کوچک</span>
-                  <input type="range" id="font-range" min="0" max="3" step="1" />
-                  <span>بزرگ</span>
-                  <div class="font-pill" id="font-pill">متوسط</div>
-                </div>
+                <div class="font-size-control"><span>کوچک</span><input type="range" id="font-range" min="0" max="3" step="1" /><span>بزرگ</span><div class="font-pill" id="font-pill">متوسط</div></div>
                 <div class="divider"></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">الگوی پس‌زمینه</div><div class="row-desc">نقاط ریز پشت چت</div></div><div class="toggle on" id="toggle-pattern" data-key="pattern"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">انیمیشن‌ها</div><div class="row-desc">انیمیشن نرم حباب‌ها و باز شدن پنل‌ها</div></div><div class="toggle on" id="toggle-anim" data-key="animations"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">حالت فشرده</div><div class="row-desc">فاصله کمتر پیام‌ها و لیست</div></div><div class="toggle" id="toggle-compact" data-key="compact"></div></div>
+                <div class="settings-row"><div class="row-main"><div class="row-title">الگوی پس‌زمینه</div></div><div class="toggle on" id="toggle-pattern" data-key="pattern"></div></div>
+                <div class="settings-row"><div class="row-main"><div class="row-title">انیمیشن‌ها</div></div><div class="toggle on" id="toggle-anim" data-key="animations"></div></div>
+                <div class="settings-row"><div class="row-main"><div class="row-title">فشرده</div></div><div class="toggle" id="toggle-compact" data-key="compact"></div></div>
               </div>
             </div>
           </div>
-
-          <!-- گفتگوها -->
           <div class="settings-tab" data-tab-content="chats">
-            <div class="settings-section">
-              <h4><span class="sec-icon">⌨️</span> ارسال پیام</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">Enter برای ارسال</div><div class="row-desc">اگر خاموش باشد، Enter خط جدید است و Ctrl+Enter ارسال می‌کند</div></div><div class="toggle on" id="toggle-enter" data-key="enterToSend"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">اسکرول خودکار</div><div class="row-desc">با رسیدن پیام جدید خودکار به پایین بیا</div></div><div class="toggle on" id="toggle-autoscroll" data-key="autoScroll"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">نمایش زمان با ثانیه</div><div class="row-desc">نمایش دقیق‌تر ساعت پیام</div></div><div class="toggle" id="toggle-seconds" data-key="showSeconds"></div></div>
-              </div>
-            </div>
-            <div class="settings-section">
-              <h4><span class="sec-icon">👁️</span> نمایش</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">نمایش وضعیت «در حال نوشتن…»</div><div class="row-desc">به بقیه نشان بده که در حال تایپی</div></div><div class="toggle on" id="toggle-typing-send" data-key="sendTyping"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">نمایش آواتار در چت</div><div class="row-desc">آینده — برای گروه‌ها</div></div><div class="toggle" id="toggle-avatars" data-key="showAvatars"></div></div>
-              </div>
-            </div>
+            <div class="settings-section"><h4>⌨️ ارسال</h4><div class="settings-card">
+              <div class="settings-row"><div class="row-main"><div class="row-title">Enter برای ارسال</div></div><div class="toggle on" id="toggle-enter" data-key="enterToSend"></div></div>
+              <div class="settings-row"><div class="row-main"><div class="row-title">اسکرول خودکار</div></div><div class="toggle on" id="toggle-autoscroll" data-key="autoScroll"></div></div>
+              <div class="settings-row"><div class="row-main"><div class="row-title">ثانیه در زمان</div></div><div class="toggle" id="toggle-seconds" data-key="showSeconds"></div></div>
+            </div></div>
           </div>
-
-          <!-- اعلان‌ها -->
           <div class="settings-tab" data-tab-content="notifications">
-            <div class="settings-section">
-              <h4><span class="sec-icon">🔔</span> صدا و دسکتاپ</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">صدای پیام جدید</div><div class="row-desc">پخش صدای کوتاه هنگام دریافت</div></div><div class="toggle on" id="toggle-sound" data-key="sound"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">اعلان دسکتاپ</div><div class="row-desc">وقتی مرورگر در پس‌زمینه است</div></div><div style="display:flex; gap:8px; align-items:center"><button class="btn btn-ghost" id="btn-req-notif">فعال‌سازی</button><div class="toggle" id="toggle-desktop" data-key="desktopNotif"></div></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">پیش‌نمایش متن در اعلان</div><div class="row-desc">متن پیام در نوتیفیکیشن نشان داده شود</div></div><div class="toggle on" id="toggle-preview" data-key="notifPreview"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">نشان UNREAD روی تب مرورگر</div><div class="row-desc">شمارش پیام‌های خوانده‌نشده در عنوان صفحه</div></div><div class="toggle on" id="toggle-badge" data-key="showUnreadBadge"></div></div>
-              </div>
-            </div>
+            <div class="settings-section"><h4>🔔 صدا</h4><div class="settings-card">
+              <div class="settings-row"><div class="row-main"><div class="row-title">صدای پیام</div></div><div class="toggle on" id="toggle-sound" data-key="sound"></div></div>
+              <div class="settings-row"><div class="row-main"><div class="row-title">اعلان دسکتاپ</div></div><div style="display:flex; gap:8px; align-items:center"><button class="btn btn-ghost" id="btn-req-notif">فعال‌سازی</button><div class="toggle" id="toggle-desktop" data-key="desktopNotif"></div></div></div>
+            </div></div>
           </div>
-
-          <!-- حریم -->
           <div class="settings-tab" data-tab-content="privacy">
-            <div class="settings-section">
-              <h4><span class="sec-icon">🔒</span> حریم خصوصی (محلی)</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">نمایش آنلاین بودن من</div><div class="row-desc">این فقط در ظاهر شماست — فعلاً سرور همیشه وضعیت را پخش می‌کند</div></div><div class="toggle on" id="toggle-online" data-key="showOnline"></div></div>
-                <div class="settings-row"><div class="row-main"><div class="row-title">تأیید خوانده شدن (تیک آبی)</div><div class="row-desc">ارسال تأیید خواندن پیام به فرستنده</div></div><div class="toggle on" id="toggle-read" data-key="sendReadReceipts"></div></div>
-              </div>
-            </div>
-            <div class="settings-section">
-              <h4><span class="sec-icon">📱</span> نشست‌های فعال</h4>
-              <div class="settings-card">
-                <div class="sessions-list" id="sessions-list">در حال بارگذاری…</div>
-                <div style="margin-top:12px; display:flex; gap:8px">
-                  <button class="btn btn-danger" id="btn-revoke-others">خروج از تمام نشست‌های دیگر</button>
-                  <span id="sessions-status" class="dim" style="align-self:center"></span>
-                </div>
-              </div>
-            </div>
+            <div class="settings-section"><h4>🔒 حریم</h4><div class="settings-card">
+              <div class="settings-row"><div class="row-main"><div class="row-title">نمایش آنلاین</div></div><div class="toggle on" id="toggle-online" data-key="showOnline"></div></div>
+            </div></div>
+            <div class="settings-section"><h4>📱 نشست‌ها</h4><div class="settings-card"><div class="sessions-list" id="sessions-list">...</div><div style="margin-top:12px"><button class="btn btn-danger" id="btn-revoke-others">خروج از باقی</button><span id="sessions-status" class="dim"></span></div></div></div>
           </div>
-
-          <!-- داده -->
           <div class="settings-tab" data-tab-content="data">
-            <div class="settings-section">
-              <h4><span class="sec-icon">💾</span> ذخیره‌سازی محلی</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">حجم کش مرورگر</div><div class="row-desc" id="storage-text">محاسبه…</div></div></div>
-                <div class="storage-bar"><div class="storage-fill" id="storage-fill"></div></div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px">
-                  <button class="btn btn-ghost" id="btn-export">📤 خروجی JSON از چت‌ها</button>
-                  <button class="btn btn-ghost" id="btn-clear-pending">🧹 پاک کردن موقت‌ها</button>
-                  <button class="btn btn-danger" id="btn-clear-all">🗑️ پاک کردن تمام داده محلی</button>
-                </div>
+            <div class="settings-section"><h4>💾 داده</h4><div class="settings-card">
+              <div class="settings-row"><div class="row-main"><div class="row-title">کش</div><div class="row-desc" id="storage-text">...</div></div></div>
+              <div class="storage-bar"><div class="storage-fill" id="storage-fill"></div></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px">
+                <button class="btn btn-ghost" id="btn-export">📤 خروجی ابری</button>
+                <button class="btn btn-danger" id="btn-clear-all">🗑️ پاک کردن محلی</button>
               </div>
-            </div>
-            <div class="settings-section">
-              <h4><span class="sec-icon">⚡</span> عملکرد</h4>
-              <div class="settings-card">
-                <div class="settings-row"><div class="row-main"><div class="row-title">بارگذاری مجدد</div><div class="row-desc">اتصال وب‌سوکت و لیست کاربران را نوسازی کن</div></div><button class="btn btn-ghost" id="btn-reload">🔄 رفرش اتصال</button></div>
-              </div>
-            </div>
+            </div></div>
           </div>
-
-          <!-- درباره -->
           <div class="settings-tab" data-tab-content="about">
             <div class="about-hero">
               <div class="about-logo">🌊</div>
-              <div class="about-title" dir="ltr">Furina mind</div>
-              <div class="about-ver">نسخه 0.2.0 — به‌روزرسانی تم تیره و تنظیمات حرفه‌ای</div>
-              <div class="dim" style="max-width:420px; line-height:1.7; font-size:0.9rem">پیام‌رسان هابی، غیرتجاری، با احراز هویت بات تلگرام. بدون SMS، امن، سریع، متن‌باز. ساخته شده با عشق به فورینا.</div>
-              <div class="about-links">
-                <a class="link-chip" href="https://github.com/bomb-xray/payam" target="_blank">⭐ GitHub</a>
-                <span class="link-chip" id="about-bot">🤖 بات: …</span>
-                <span class="link-chip">🚀 سرور: <span id="about-uptime" dir="ltr">—</span></span>
-              </div>
+              <div class="about-title" dir="ltr">Furina mind v0.3</div>
+              <div class="about-ver">گروه، کانال، مخاطبین + ایمپورت از بات</div>
+              <div class="about-links"><a class="link-chip" href="https://github.com/bomb-xray/payam" target="_blank">GitHub</a><span class="link-chip" id="about-bot">🤖 بات: …</span></div>
             </div>
-            <div class="settings-section">
-              <h4><span class="sec-icon">✨</span> چیزهای جدید در این آپدیت</h4>
-              <div class="settings-card" style="line-height:2; font-size:0.9rem; color:var(--text-2)">
-                • ✅ فیکس باگ پیام‌های من که چپ می‌رفت و تیره بود — حالا راست و آبی پررنگه<br>
-                • ✅ سیستم تم چندگانه (تیره / AMOLED / روشن) + رنگ تأکیدی<br>
-                • ✅ کنترل فونت، حالت فشرده، الگوی پس‌زمینه، انیمیشن<br>
-                • ✅ تنظیمات ارسال (Enter)، صدا، اعلان دسکتاپ، تیک خوانده‌شدن<br>
-                • ✅ مدیریت نشست‌ها (خروج از باقی دیوایس‌ها)<br>
-                • ✅ پنل حرفه‌ای با ۷ بخش کامل
-              </div>
-            </div>
+            <div class="settings-section"><div class="settings-card" style="line-height:2; font-size:0.9rem">
+              • گروه و کانال ابری با دعوت لینکی<br>
+              • مخاطبین با ایمپورت واقعی از بات تلگرام (request_contact)<br>
+              • گروه: چند نفره، ادمین، خروج، لینک دعوت<br>
+              • کانال: فقط ادمین پست می‌ذاره<br>
+              • نمایش نام فرستنده در گروه
+            </div></div>
           </div>
-
         </div>
       </div>
     </div>

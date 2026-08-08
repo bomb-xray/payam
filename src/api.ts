@@ -15,6 +15,7 @@ import {
   getUserById,
   listUsers,
   getHistory,
+  getGroupHistory,
   markRead,
   updateUserName,
   listSessionsByUser,
@@ -22,13 +23,28 @@ import {
   getLastMessages,
   getAllMessagesForUser,
   insertMessage,
+  insertGroupMessage,
+  listContacts,
+  addContact,
+  deleteContact,
+  createGroup,
+  getGroupById,
+  listGroupsForUser,
+  getGroupMembers,
+  addGroupMember,
+  removeGroupMember,
+  setGroupMemberRole,
+  isGroupMember,
+  getGroupByInvite,
+  updateGroupInfo,
+  unreadGroupCounts,
   User,
 } from "./db";
 import crypto from "crypto";
-import { announceUser, notifyUser, isOnline } from "./ws";
+import { announceUser, notifyUser, isOnline, broadcastGroup } from "./ws";
 
 export const api = express.Router();
-api.use(express.json({ limit: "100kb" }));
+api.use(express.json({ limit: "200kb" }));
 
 function fail(res: Response, status: number, error: string, message?: string): void {
   res.status(status).json({ ok: false, error, message });
@@ -161,7 +177,7 @@ api.get("/auth/status", (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// نیازمند احراز هویت
+// نیازمند احراز هویت — کاربر
 // ---------------------------------------------------------------------------
 
 api.get("/me", authed, (req, res) => {
@@ -189,7 +205,6 @@ api.put("/me", authed, (req, res) => {
   }
   const updated = updateUserName(me.id, name);
   if (!updated) return fail(res, 400, "bad_name", "نام نامعتبر است.");
-  // به همه اطلاع بده نام عوض شده
   announceUser(updated);
   res.json({ ok: true, user: publicUser(updated) });
 });
@@ -216,34 +231,217 @@ api.post("/sessions/revoke-others", authed, (req, res) => {
   res.json({ ok: true, revoked: count });
 });
 
+// ---------------------------------------------------------------------------
+// مخاطبین — ایمپورت از بات تلگرام
+// ---------------------------------------------------------------------------
+
+api.get("/contacts", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const contacts = listContacts(me.id).map((c) => ({
+    id: c.id,
+    name: c.name,
+    alias: c.alias,
+    phone: c.phone ? `***${c.phone.slice(-4)}` : null, // برای حریم، فقط 4 رقم آخر
+    phone_full: c.phone, // فعلاً کامل میدیم چون هابیه
+    tg_id: c.tg_id,
+    contact_user_id: c.contact_user_id,
+    user: c.contact_user_id ? publicUser(getUserById(c.contact_user_id) as User) : null,
+    created_at: c.created_at,
+  }));
+  res.json({ ok: true, contacts });
+});
+
+api.post("/contacts", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const { tg_id, username, phone, name, alias } = req.body ?? {};
+
+  let contactUser: User | undefined;
+  if (tg_id) {
+    const tid = Number(tg_id);
+    if (!Number.isInteger(tid)) return fail(res, 400, "bad_tg_id");
+    contactUser = getUserByTgId(tid);
+    if (!contactUser) return fail(res, 404, "not_found", "کاربری با این TG ID پیدا نشد. باید اول بات رو استارت کنه.");
+  } else if (username) {
+    const uname = String(username).replace(/^@/, "").trim();
+    const found = listUsers().find((u) => (u.username || "").toLowerCase() === uname.toLowerCase());
+    if (!found) return fail(res, 404, "not_found", "یوزرنیم پیدا نشد.");
+    contactUser = found;
+  } else if (phone) {
+    // اجازه افزودن با شماره (حتی اگر عضو نیست)
+    const nm = typeof name === "string" && name.trim() ? name.trim() : String(phone);
+    const c = addContact(me.id, { phone: String(phone), name: nm, alias });
+    return res.json({ ok: true, contact: c });
+  } else {
+    return fail(res, 400, "bad_input", "tg_id یا username یا phone لازم است.");
+  }
+
+  const c = addContact(me.id, {
+    contactUserId: contactUser.id,
+    name: typeof name === "string" && name.trim() ? name.trim() : contactUser.name,
+    alias: alias ?? null,
+    tgId: contactUser.tg_id,
+  });
+  res.json({ ok: true, contact: c, user: publicUser(contactUser) });
+});
+
+api.delete("/contacts/:id", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const id = Number(req.params.id);
+  if (!id) return fail(res, 400, "bad_id");
+  const ok = deleteContact(me.id, id);
+  if (!ok) return fail(res, 404, "not_found");
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// گروه‌ها و کانال‌ها
+// ---------------------------------------------------------------------------
+
+api.get("/groups", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const groups = listGroupsForUser(me.id);
+  res.json({ ok: true, groups });
+});
+
+api.post("/groups", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const { name, type, memberIds, description } = req.body ?? {};
+  if (!name || typeof name !== "string" || name.trim().length < 2)
+    return fail(res, 400, "bad_name", "نام گروه باید حداقل ۲ حرف باشد.");
+
+  const t = type === "channel" ? "channel" : "group";
+  const members: number[] = Array.isArray(memberIds) ? memberIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+
+  const g = createGroup(me.id, name, t as any, members, description || "");
+  res.json({ ok: true, group: g });
+});
+
+api.get("/groups/:id", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  const g = getGroupById(gid);
+  if (!g) return fail(res, 404, "not_found");
+  if (!isGroupMember(gid, me.id)) return fail(res, 403, "forbidden", "عضو گروه نیستی.");
+  res.json({ ok: true, group: g, members: getGroupMembers(gid).map((m) => ({ user: publicUser(m.user), role: m.role })) });
+});
+
+api.put("/groups/:id", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  const g = getGroupById(gid);
+  if (!g) return fail(res, 404, "not_found");
+  const members = getGroupMembers(gid);
+  const myRole = members.find((m) => m.user.id === me.id)?.role;
+  if (!myRole || !["owner", "admin"].includes(myRole)) return fail(res, 403, "forbidden", "فقط ادمین می‌تواند گروه را ویرایش کند.");
+
+  const { name, description } = req.body ?? {};
+  const updated = updateGroupInfo(gid, { name, description });
+  res.json({ ok: true, group: updated });
+});
+
+api.post("/groups/:id/members", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  const { userId, role } = req.body ?? {};
+  const uid = Number(userId);
+  if (!uid) return fail(res, 400, "bad_user");
+  const g = getGroupById(gid);
+  if (!g) return fail(res, 404, "not_found");
+  if (!isGroupMember(gid, me.id)) return fail(res, 403, "forbidden");
+  // فقط owner/admin می‌تونن اضافه کنن (برای سادگی فعلاً همه ممبرها می‌تونن در گروه، فقط کانال محدوده)
+  if (g.type === "channel") {
+    const mems = getGroupMembers(gid);
+    const myRole = mems.find((m) => m.user.id === me.id)?.role;
+    if (!myRole || !["owner", "admin"].includes(myRole)) return fail(res, 403, "forbidden", "در کانال فقط ادمین می‌تواند عضو اضافه کند.");
+  }
+  const added = addGroupMember(gid, uid, role === "admin" ? "admin" : "member");
+  if (!added) return fail(res, 400, "already_member", "قبلاً عضو بوده یا خطا.");
+  res.json({ ok: true });
+});
+
+api.delete("/groups/:id/members/:uid", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  const uid = Number(req.params.uid);
+  if (!gid || !uid) return fail(res, 400, "bad_id");
+  if (!isGroupMember(gid, me.id)) return fail(res, 403, "forbidden");
+  // فقط خود فرد یا ادمین می‌تونه حذف کنه
+  if (uid !== me.id) {
+    const mems = getGroupMembers(gid);
+    const myRole = mems.find((m) => m.user.id === me.id)?.role;
+    if (!myRole || !["owner", "admin"].includes(myRole)) return fail(res, 403, "forbidden");
+  }
+  const ok = removeGroupMember(gid, uid);
+  if (!ok) return fail(res, 404, "not_found");
+  res.json({ ok: true });
+});
+
+api.post("/groups/:id/invite", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  const g = getGroupById(gid);
+  if (!g) return fail(res, 404, "not_found");
+  if (!isGroupMember(gid, me.id)) return fail(res, 403, "forbidden");
+  const token = g.invite_token;
+  const link = `https://t.me/${botUsername}?start=invite_${token}`;
+  res.json({ ok: true, token, link });
+});
+
+api.post("/groups/join/:token", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const token = String(req.params.token);
+  const g = getGroupByInvite(token);
+  if (!g) return fail(res, 404, "not_found", "لینک دعوت نامعتبر است.");
+  if (isGroupMember(g.id, me.id)) return res.json({ ok: true, group: g, already: true });
+  addGroupMember(g.id, me.id);
+  res.json({ ok: true, group: g });
+});
+
+api.get("/groups/:id/messages", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const gid = Number(req.params.id);
+  if (!isGroupMember(gid, me.id)) return fail(res, 403, "forbidden");
+  const msgs = getGroupHistory(gid, 200);
+  res.json({ ok: true, messages: msgs });
+});
+
+// ---------------------------------------------------------------------------
+// پیام‌ها (شخصی + گروهی ابری)
+// ---------------------------------------------------------------------------
+
 api.post("/messages", authed, (req, res) => {
   const me: User = (req as any).user;
   const to = Number(req.body?.to);
+  const groupId = req.body?.group ? Number(req.body.group) : null;
   const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 4096) : "";
-  if (!to || !text) return fail(res, 400, "bad_input", "مقصد یا متن نامعتبر است.");
-  const peer = to ? getUserById(to) : undefined;
-  if (!peer) return fail(res, 404, "no_peer", "کاربر مقصد پیدا نشد.");
+  if (!text) return fail(res, 400, "bad_input", "متن خالی است.");
 
   try {
-    const row = insertMessage(me.id, peer.id, text);
-    if (peer.id === me.id) markRead(me.id, me.id);
-
-    const event = {
-      t: "msg",
-      id: row.id,
-      from: me.id,
-      to: peer.id,
-      text: row.text,
-      ts: row.ts,
-      read: peer.id === me.id,
-    };
-
-    // اطلاع به گیرنده و به بقیه دستگاه‌های فرستنده از طریق WS
-    if (peer.id !== me.id) {
-      notifyUser(peer.id, event);
+    if (groupId) {
+      if (!isGroupMember(groupId, me.id)) return fail(res, 403, "forbidden", "عضو گروه نیستی.");
+      const g = getGroupById(groupId);
+      if (g?.type === "channel") {
+        const members = getGroupMembers(groupId);
+        const myRole = members.find((m) => m.user.id === me.id)?.role;
+        if (!myRole || !["owner", "admin"].includes(myRole)) return fail(res, 403, "forbidden", "فقط ادمین کانال می‌تواند پیام بفرستد.");
+      }
+      const row = insertGroupMessage(me.id, groupId, text);
+      const event = { t: "msg", id: row.id, from: me.id, group: groupId, text: row.text, ts: row.ts };
+      broadcastGroup(groupId, event);
+      return res.json({ ok: true, message: row, event });
+    } else {
+      if (!to) return fail(res, 400, "bad_input", "مقصد نامشخص است.");
+      const peer = getUserById(to);
+      if (!peer) return fail(res, 404, "no_peer", "کاربر پیدا نشد.");
+      const row = insertMessage(me.id, peer.id, text);
+      if (peer.id === me.id) {
+        const { markRead } = require("./db");
+        markRead(me.id, me.id);
+      }
+      const event = { t: "msg", id: row.id, from: me.id, to: peer.id, text: row.text, ts: row.ts, read: peer.id === me.id };
+      if (peer.id !== me.id) notifyUser(peer.id, event);
+      return res.json({ ok: true, message: row, event });
     }
-    // به همه بگو پیام جدید (ack برای فرستنده فعلاً از طریق HTTP response است)
-    return res.json({ ok: true, message: row, event });
   } catch (e) {
     console.error("[api] post /messages", e);
     return fail(res, 500, "internal");
@@ -253,18 +451,32 @@ api.post("/messages", authed, (req, res) => {
 api.get("/conversations", authed, (req, res) => {
   const me: User = (req as any).user;
   const last = getLastMessages(me.id);
-  res.json({ ok: true, last });
+  const unread = {
+    ...require("./db").unreadCounts(me.id),
+    groups: unreadGroupCounts(me.id),
+  };
+  res.json({ ok: true, last, unread });
 });
 
 api.get("/export", authed, (req, res) => {
   const me: User = (req as any).user;
   const messages = getAllMessagesForUser(me.id, 5000);
-  res.json({ ok: true, me: publicUser(me), messages, exported_at: Date.now() });
+  const groups = listGroupsForUser(me.id);
+  const contacts = listContacts(me.id);
+  res.json({ ok: true, me: publicUser(me), messages, groups, contacts, exported_at: Date.now() });
 });
 
 api.get("/messages", authed, (req, res) => {
   const me: User = (req as any).user;
   const peerId = Number(req.query.with);
+  const groupId = req.query.group ? Number(req.query.group) : null;
+
+  if (groupId) {
+    if (!isGroupMember(groupId, me.id)) return fail(res, 403, "forbidden");
+    const messages = getGroupHistory(groupId, 200);
+    return res.json({ ok: true, messages });
+  }
+
   const peer = peerId ? getUserById(peerId) : undefined;
   if (!peer) return fail(res, 404, "no_peer", "چنین کاربری وجود ندارد.");
 
@@ -274,7 +486,6 @@ api.get("/messages", authed, (req, res) => {
   res.json({ ok: true, messages });
 });
 
-/** وب‌هوک داخلی نیست؛ دیپ‌لینک بات این‌جا استفاده نمی‌شود ولی برای تست دستی نگه داشته شده */
 api.get("/health", (_req, res) => {
   res.json({ ok: true, bot: botReady() ? "ready" : "connecting", uptime: process.uptime() });
 });

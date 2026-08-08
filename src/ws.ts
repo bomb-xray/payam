@@ -5,11 +5,17 @@ import {
   User,
   listUsers,
   insertMessage,
+  insertGroupMessage,
   unreadCounts,
+  unreadGroupCounts,
   markRead,
   touchLastSeen,
   getUserById,
   getLastMessages,
+  listGroupsForUser,
+  isGroupMember,
+  getGroupById,
+  getGroupMembers,
 } from "./db";
 
 interface PublicUser {
@@ -29,6 +35,19 @@ function publicUser(u: User): PublicUser {
     username: u.username,
     online: online.has(u.id),
     last_seen: u.last_seen,
+  };
+}
+
+function publicGroup(g: any) {
+  return {
+    id: g.id,
+    name: g.name,
+    description: g.description,
+    type: g.type,
+    invite_token: g.invite_token,
+    member_count: g.member_count,
+    role: g.role,
+    created_at: g.created_at,
   };
 }
 
@@ -58,12 +77,17 @@ function broadcast(obj: unknown): void {
   }
 }
 
-/** وقتی کاربر جدیدی ثبت‌نام می‌کند، به همه اطلاع بده */
+export function broadcastGroup(groupId: number, obj: unknown): void {
+  const members = getGroupMembers(groupId);
+  for (const m of members) {
+    sendToUser(m.user.id, obj);
+  }
+}
+
 export function announceUser(u: User): void {
   broadcast({ t: "user", user: publicUser(u) });
 }
 
-/** ارسال یک رویداد به یک کاربر خاص */
 export function notifyUser(userId: number, obj: unknown): void {
   sendToUser(userId, obj);
 }
@@ -90,11 +114,15 @@ export function initWs(server: http.Server): void {
     set.add(ws);
 
     const users = listUsers().filter((u) => u.id !== user.id);
+    const groups = listGroupsForUser(user.id).map(publicGroup);
+
     send(ws, {
       t: "hello",
       me: publicUser({ ...user, online: true } as User),
       users: users.map(publicUser),
+      groups,
       unread: unreadCounts(user.id),
+      unreadGroups: unreadGroupCounts(user.id),
       last: getLastMessages(user.id),
     });
 
@@ -102,7 +130,6 @@ export function initWs(server: http.Server): void {
       broadcast({ t: "presence", id: user.id, online: true });
     }
 
-    // نگه‌داشتن اتصال زنده
     let alive = true;
     const pingTimer = setInterval(() => {
       if (!alive) {
@@ -112,9 +139,7 @@ export function initWs(server: http.Server): void {
       alive = false;
       try {
         ws.ping();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     }, 30000);
     ws.on("pong", () => {
       alive = true;
@@ -158,9 +183,55 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
 
   switch (msg?.t) {
     case "msg": {
-      const to = Number(msg.to);
       const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 4096) : "";
-      if (!to || !text) return;
+      if (!text) return;
+
+      // گروه
+      if (msg.group) {
+        const gid = Number(msg.group);
+        if (!gid) return;
+        if (!isGroupMember(gid, me.id)) {
+          send(ws, { t: "error", error: "not_member" });
+          return;
+        }
+        const g = getGroupById(gid);
+        if (!g) return;
+        if (g.type === "channel") {
+          const members = getGroupMembers(gid);
+          const myRole = members.find((m) => m.user.id === me.id)?.role;
+          if (!myRole || !["owner", "admin"].includes(myRole)) {
+            send(ws, { t: "error", error: "channel_readonly" });
+            return;
+          }
+        }
+        let row;
+        try {
+          row = insertGroupMessage(me.id, gid, text);
+        } catch (e) {
+          console.error("[ws] insertGroupMessage fail", e);
+          send(ws, { t: "error", error: "db_fail" });
+          return;
+        }
+        const event = {
+          t: "msg",
+          id: row.id,
+          from: me.id,
+          group: gid,
+          text: row.text,
+          ts: row.ts,
+        };
+        // به همه اعضای گروه + تأیید به فرستنده
+        broadcastGroup(gid, event);
+        const ack = { ...event, ack: true, temp: msg.temp ?? null };
+        send(ws, ack);
+        // به بقیه دستگاه‌های فرستنده هم ack برود که pending پاک شود
+        sendToUser(me.id, ack, ws);
+        break;
+      }
+
+      // پیام شخصی
+      const to = Number(msg.to);
+      if (!to) return;
       const peer = getUserById(to);
       if (!peer) {
         send(ws, { t: "error", error: "no_peer" });
@@ -168,14 +239,16 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
       }
       let row;
       try {
-        row = insertMessage(me.id, peer.id, text);
+        row = insertMessage(me.id, peer.id, text, null);
       } catch (e) {
         console.error("[ws] insertMessage failed", e);
         send(ws, { t: "error", error: "db_fail" });
         return;
       }
-      // پیام به خود (Saved Messages): بلافاصله خوانده‌شده است ولی باید ابری ذخیره شود
-      if (peer.id === me.id) markRead(me.id, me.id);
+      if (peer.id === me.id) {
+        const { markRead } = require("./db");
+        markRead(me.id, me.id);
+      }
 
       const event = {
         t: "msg",
@@ -188,18 +261,12 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
       };
 
       if (peer.id === me.id) {
-        // ذخیره‌شده‌ها: فقط یک ack مستقیم به فرستنده + پخش به بقیه دستگاه‌های خودش
         const ack = { ...event, ack: true, temp: msg.temp ?? null };
-        // تضمینی: مستقیم به همین سوکت
         send(ws, ack);
-        // به بقیه سوکت‌های همین کاربر (اگر چند تب بازه)
         sendToUser(me.id, ack, ws);
-        // برای دستگاه‌های دیگر، یک پیام معمولی هم بفرست تا در صورت نیاز به عنوان پیام جدید ببینند
-        // (کلاینت ما ack را هم به عنوان پیام جدید قبول می‌کند)
         sendToUser(me.id, event, ws);
       } else {
         sendToUser(peer.id, event);
-        // تأیید به فرستنده (و سایر دستگاه‌هایش) — مستقیم + بقیه
         const ack = { ...event, ack: true, temp: msg.temp ?? null };
         send(ws, ack);
         sendToUser(me.id, ack, ws);
@@ -209,13 +276,23 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
 
     case "typing": {
       const to = Number(msg.to);
-      if (to && to !== me.id) sendToUser(to, { t: "typing", from: me.id });
+      const group = msg.group ? Number(msg.group) : null;
+      if (group) {
+        const members = getGroupMembers(group);
+        for (const m of members) {
+          if (m.user.id === me.id) continue;
+          sendToUser(m.user.id, { t: "typing", from: me.id, group });
+        }
+      } else if (to && to !== me.id) {
+        sendToUser(to, { t: "typing", from: me.id });
+      }
       break;
     }
 
     case "read": {
       const peer = Number(msg.peer);
       if (!peer) return;
+      const { markRead } = require("./db");
       const changed = markRead(me.id, peer);
       if (changed > 0) sendToUser(peer, { t: "read", by: me.id });
       break;

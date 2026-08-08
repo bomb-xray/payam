@@ -40,11 +40,54 @@ CREATE TABLE IF NOT EXISTS messages (
   recipient INTEGER NOT NULL REFERENCES users(id),
   text      TEXT NOT NULL,
   ts        INTEGER NOT NULL,
-  read_at   INTEGER
+  read_at   INTEGER,
+  group_id  INTEGER,
+  reply_to  INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_msg_sender    ON messages(sender, recipient, ts);
 CREATE INDEX IF NOT EXISTS idx_msg_recipient ON messages(recipient, sender, read_at);
+CREATE INDEX IF NOT EXISTS idx_msg_group     ON messages(group_id, ts);
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_user_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  phone            TEXT,
+  name             TEXT NOT NULL,
+  alias            TEXT,
+  tg_id            INTEGER,
+  created_at       INTEGER NOT NULL,
+  UNIQUE(owner_id, contact_user_id),
+  UNIQUE(owner_id, phone)
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  description  TEXT DEFAULT '',
+  creator_id   INTEGER NOT NULL REFERENCES users(id),
+  type         TEXT NOT NULL DEFAULT 'group', -- group | channel
+  invite_token TEXT UNIQUE,
+  avatar       TEXT,
+  created_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role      TEXT NOT NULL DEFAULT 'member', -- owner | admin | member
+  joined_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
 `);
+
+// مایگریشن‌های سبک برای دیتابیس‌های قدیمی
+try { db.prepare("ALTER TABLE messages ADD COLUMN group_id INTEGER").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN reply_to INTEGER").run(); } catch {}
+try { db.prepare("ALTER TABLE groups ADD COLUMN type TEXT NOT NULL DEFAULT 'group'").run(); } catch {}
+try { db.prepare("ALTER TABLE groups ADD COLUMN invite_token TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE groups ADD COLUMN description TEXT DEFAULT ''").run(); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_invite ON groups(invite_token)"); } catch {}
 
 // ---------------------------------------------------------------------------
 // تایپ‌ها
@@ -66,6 +109,8 @@ export interface MessageRow {
   text: string;
   ts: number;
   read_at: number | null;
+  group_id: number | null;
+  reply_to: number | null;
 }
 
 export interface AuthCodeRow {
@@ -78,7 +123,39 @@ export interface AuthCodeRow {
   session_token: string | null;
 }
 
+export interface ContactRow {
+  id: number;
+  owner_id: number;
+  contact_user_id: number | null;
+  phone: string | null;
+  name: string;
+  alias: string | null;
+  tg_id: number | null;
+  created_at: number;
+  // joined from users
+  user_name?: string;
+  user_username?: string | null;
+  user_online?: boolean;
+}
+
+export interface GroupRow {
+  id: number;
+  name: string;
+  description: string;
+  creator_id: number;
+  type: string;
+  invite_token: string | null;
+  avatar: string | null;
+  created_at: number;
+  member_count?: number;
+  role?: string;
+}
+
 export const now = (): number => Date.now();
+
+function genInvite(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+}
 
 // ---------------------------------------------------------------------------
 // کاربران
@@ -157,7 +234,6 @@ export function createAuthCode(
   code: string,
   ttlMs: number
 ): void {
-  // کدهای قبلیِ همین آی‌دی باطل شوند
   db.prepare("DELETE FROM auth_codes WHERE tg_id = ? AND used = 0").run(tgId);
   const t = now();
   db.prepare(
@@ -183,20 +259,21 @@ export function cleanupAuthCodes(): void {
 }
 
 // ---------------------------------------------------------------------------
-// پیام‌ها
+// پیام‌ها (شخصی + گروهی)
 // ---------------------------------------------------------------------------
 
 export function insertMessage(
   sender: number,
   recipient: number,
-  text: string
+  text: string,
+  groupId: number | null = null
 ): MessageRow {
   const ts = now();
   const info = db
     .prepare(
-      "INSERT INTO messages (sender, recipient, text, ts) VALUES (?, ?, ?, ?)"
+      "INSERT INTO messages (sender, recipient, text, ts, group_id) VALUES (?, ?, ?, ?, ?)"
     )
-    .run(sender, recipient, text, ts);
+    .run(sender, recipient, text, ts, groupId);
   return {
     id: Number(info.lastInsertRowid),
     sender,
@@ -204,6 +281,32 @@ export function insertMessage(
     text,
     ts,
     read_at: null,
+    group_id: groupId,
+    reply_to: null,
+  };
+}
+
+export function insertGroupMessage(
+  sender: number,
+  groupId: number,
+  text: string
+): MessageRow {
+  const ts = now();
+  // برای گروه، recipient را برابر sender می‌گذاریم تا FK رد نشود ولی group_id اصلی است
+  const info = db
+    .prepare(
+      "INSERT INTO messages (sender, recipient, text, ts, group_id) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(sender, sender, text, ts, groupId);
+  return {
+    id: Number(info.lastInsertRowid),
+    sender,
+    recipient: sender,
+    text,
+    ts,
+    read_at: null,
+    group_id: groupId,
+    reply_to: null,
   };
 }
 
@@ -215,23 +318,259 @@ export function getHistory(
   return db
     .prepare<[number, number, number, number, number]>(
       `SELECT * FROM messages
-       WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
+       WHERE group_id IS NULL AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
        ORDER BY ts DESC LIMIT ?`
     )
     .all(a, b, b, a, limit)
     .reverse() as MessageRow[];
 }
 
-/** پیام‌های خوانده‌نشده‌ی از طرف peer به من را خوانده‌شده کن؛ تعدادشان را برگردان */
+export function getGroupHistory(groupId: number, limit = 200): MessageRow[] {
+  return db
+    .prepare<[number, number]>(
+      `SELECT * FROM messages WHERE group_id = ? ORDER BY ts DESC LIMIT ?`
+    )
+    .all(groupId, limit)
+    .reverse() as MessageRow[];
+}
+
 export function markRead(me: number, peer: number): number {
   const info = db
     .prepare(
       `UPDATE messages SET read_at = ?
-       WHERE recipient = ? AND sender = ? AND read_at IS NULL`
+       WHERE group_id IS NULL AND recipient = ? AND sender = ? AND read_at IS NULL`
     )
     .run(now(), me, peer);
   return info.changes;
 }
+
+export function getLastMessages(me: number): Record<number, MessageRow> {
+  const rows = db
+    .prepare<[number, number, number]>(
+      `SELECT * FROM messages
+       WHERE (sender = ? OR recipient = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?))
+       ORDER BY ts DESC`
+    )
+    .all(me, me, me) as MessageRow[];
+  const out: Record<number, MessageRow> = {};
+  const seenGroups = new Set<number>();
+  for (const m of rows) {
+    if (m.group_id) {
+      if (seenGroups.has(m.group_id)) continue;
+      seenGroups.add(m.group_id);
+      out[-m.group_id] = m; // کلید منفی برای گروه تا با کاربر قاطی نشه
+      continue;
+    }
+    const peer = m.sender === me ? m.recipient : m.sender;
+    if (out[peer]) continue;
+    out[peer] = m;
+  }
+  return out;
+}
+
+export function getAllMessagesForUser(me: number, limit = 1000): MessageRow[] {
+  return db
+    .prepare<[number, number, number, number]>(
+      `SELECT * FROM messages
+       WHERE sender = ? OR recipient = ? OR group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+       ORDER BY ts ASC LIMIT ?`
+    )
+    .all(me, me, me, limit) as MessageRow[];
+}
+
+// ---------------------------------------------------------------------------
+// مخاطبین
+// ---------------------------------------------------------------------------
+
+export function addContact(
+  ownerId: number,
+  opts: { contactUserId?: number; phone?: string; name: string; alias?: string; tgId?: number }
+): ContactRow {
+  const existing = opts.contactUserId
+    ? db.prepare<[number, number]>("SELECT * FROM contacts WHERE owner_id = ? AND contact_user_id = ?").get(ownerId, opts.contactUserId)
+    : opts.phone
+      ? db.prepare<[number, string]>("SELECT * FROM contacts WHERE owner_id = ? AND phone = ?").get(ownerId, opts.phone)
+      : undefined;
+
+  if (existing) return existing as ContactRow;
+
+  const info = db
+    .prepare(
+      `INSERT INTO contacts (owner_id, contact_user_id, phone, name, alias, tg_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      ownerId,
+      opts.contactUserId ?? null,
+      opts.phone ?? null,
+      opts.name,
+      opts.alias ?? null,
+      opts.tgId ?? null,
+      now()
+    );
+  return db.prepare<[number]>("SELECT * FROM contacts WHERE id = ?").get(Number(info.lastInsertRowid)) as ContactRow;
+}
+
+export function listContacts(ownerId: number): ContactRow[] {
+  return db
+    .prepare<[number]>(
+      `SELECT c.*, u.name as user_name, u.username as user_username
+       FROM contacts c LEFT JOIN users u ON u.id = c.contact_user_id
+       WHERE c.owner_id = ? ORDER BY c.name COLLATE NOCASE`
+    )
+    .all(ownerId) as ContactRow[];
+}
+
+export function deleteContact(ownerId: number, contactId: number): boolean {
+  const info = db.prepare<[number, number]>("DELETE FROM contacts WHERE id = ? AND owner_id = ?").run(contactId, ownerId);
+  return info.changes > 0;
+}
+
+export function getContactByPhone(ownerId: number, phone: string): ContactRow | undefined {
+  return db
+    .prepare<[number, string]>("SELECT * FROM contacts WHERE owner_id = ? AND phone = ?")
+    .get(ownerId, phone) as ContactRow | undefined;
+}
+
+// هندلر بات: وقتی کاربر تلگرام مخاطب شیر می‌کند
+export function handleTelegramContactShare(
+  ownerTgId: number,
+  contact: { phone_number: string; first_name: string; last_name?: string; user_id?: number }
+): { contact: ContactRow; linkedUser?: User } {
+  const owner = getUserByTgId(ownerTgId);
+  if (!owner) throw new Error("owner not found");
+
+  let linkedUser: User | undefined;
+  if (contact.user_id) {
+    linkedUser = getUserByTgId(contact.user_id);
+  }
+
+  const name = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.phone_number;
+
+  const row = addContact(owner.id, {
+    contactUserId: linkedUser?.id,
+    phone: contact.phone_number,
+    name,
+    tgId: contact.user_id,
+  });
+
+  return { contact: row, linkedUser };
+}
+
+// ---------------------------------------------------------------------------
+// گروه‌ها و کانال‌ها
+// ---------------------------------------------------------------------------
+
+export function createGroup(
+  creatorId: number,
+  name: string,
+  type: "group" | "channel" = "group",
+  memberIds: number[] = [],
+  description = ""
+): GroupRow {
+  const token = genInvite();
+  const info = db
+    .prepare(
+      `INSERT INTO groups (name, description, creator_id, type, invite_token, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(name.trim().slice(0, 80) || "گروه بدون نام", description.slice(0, 500), creatorId, type, token, now());
+  const groupId = Number(info.lastInsertRowid);
+
+  db.prepare(
+    `INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'owner', ?)`
+  ).run(groupId, creatorId, now());
+
+  const unique = [...new Set(memberIds)].filter((id) => id !== creatorId);
+  for (const uid of unique) {
+    try {
+      db.prepare(
+        `INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)`
+      ).run(groupId, uid, now());
+    } catch {}
+  }
+
+  return getGroupById(groupId)!;
+}
+
+export function getGroupById(id: number): GroupRow | undefined {
+  const row = db.prepare<[number]>("SELECT * FROM groups WHERE id = ?").get(id) as GroupRow | undefined;
+  if (!row) return undefined;
+  const cnt = db.prepare<[number]>("SELECT COUNT(*) as c FROM group_members WHERE group_id = ?").get(id) as { c: number };
+  row.member_count = cnt.c;
+  return row;
+}
+
+export function listGroupsForUser(userId: number): GroupRow[] {
+  return db
+    .prepare<[number]>(
+      `SELECT g.*, gm.role, (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count
+       FROM groups g JOIN group_members gm ON gm.group_id = g.id
+       WHERE gm.user_id = ? ORDER BY g.created_at DESC`
+    )
+    .all(userId) as GroupRow[];
+}
+
+export function isGroupMember(groupId: number, userId: number): boolean {
+  const row = db
+    .prepare<[number, number]>("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(groupId, userId);
+  return !!row;
+}
+
+export function getGroupMembers(groupId: number): Array<{ user: User; role: string; joined_at: number }> {
+  const rows = db
+    .prepare<[number]>(
+      `SELECT u.*, gm.role, gm.joined_at
+       FROM group_members gm JOIN users u ON u.id = gm.user_id
+       WHERE gm.group_id = ? ORDER BY gm.joined_at ASC`
+    )
+    .all(groupId) as Array<User & { role: string; joined_at: number }>;
+  return rows.map((r) => ({
+    user: { id: r.id, tg_id: r.tg_id, name: r.name, username: r.username, created_at: r.created_at, last_seen: r.last_seen } as User,
+    role: r.role,
+    joined_at: r.joined_at,
+  }));
+}
+
+export function addGroupMember(groupId: number, userId: number, role = "member"): boolean {
+  try {
+    db.prepare(
+      `INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)`
+    ).run(groupId, userId, role, now());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeGroupMember(groupId: number, userId: number): boolean {
+  const info = db.prepare<[number, number]>("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, userId);
+  return info.changes > 0;
+}
+
+export function setGroupMemberRole(groupId: number, userId: number, role: string): boolean {
+  const info = db.prepare<[string, number, number]>("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+  return info.changes > 0;
+}
+
+export function getGroupByInvite(token: string): GroupRow | undefined {
+  return db.prepare<[string]>("SELECT * FROM groups WHERE invite_token = ?").get(token) as GroupRow | undefined;
+}
+
+export function updateGroupInfo(groupId: number, fields: { name?: string; description?: string }): GroupRow | undefined {
+  if (fields.name) {
+    db.prepare("UPDATE groups SET name = ? WHERE id = ?").run(fields.name.slice(0, 80), groupId);
+  }
+  if (fields.description !== undefined) {
+    db.prepare("UPDATE groups SET description = ? WHERE id = ?").run(fields.description.slice(0, 500), groupId);
+  }
+  return getGroupById(groupId);
+}
+
+// ---------------------------------------------------------------------------
+// دیگر توابع
+// ---------------------------------------------------------------------------
 
 export function updateUserName(id: number, name: string): User | undefined {
   const trimmed = name.trim().replace(/\s+/g, " ").slice(0, 64);
@@ -253,44 +592,29 @@ export function deleteSessionsExcept(userId: number, keepHash: string): number {
   return info.changes;
 }
 
-export function getLastMessages(me: number): Record<number, MessageRow> {
-  // آخرین پیام هر مکالمه (شامل ذخیره‌شده‌ها)
-  const rows = db
-    .prepare<[number, number]>(
-      `SELECT * FROM messages
-       WHERE sender = ? OR recipient = ?
-       ORDER BY ts DESC`
-    )
-    .all(me, me) as MessageRow[];
-  const out: Record<number, MessageRow> = {};
-  for (const m of rows) {
-    const peer = m.sender === me ? m.recipient : m.sender;
-    if (out[peer]) continue;
-    // برای خود-پیام، peer = me، پس فقط یکبار
-    out[peer] = m;
-  }
-  return out;
-}
-
-export function getAllMessagesForUser(me: number, limit = 1000): MessageRow[] {
-  return db
-    .prepare<[number, number, number]>(
-      `SELECT * FROM messages
-       WHERE sender = ? OR recipient = ?
-       ORDER BY ts ASC LIMIT ?`
-    )
-    .all(me, me, limit) as MessageRow[];
-}
-
 export function unreadCounts(me: number): Record<number, number> {
   const rows = db
     .prepare<[number]>(
       `SELECT sender, COUNT(*) AS c FROM messages
-       WHERE recipient = ? AND read_at IS NULL AND sender != recipient
+       WHERE group_id IS NULL AND recipient = ? AND read_at IS NULL AND sender != recipient
        GROUP BY sender`
     )
     .all(me) as Array<{ sender: number; c: number }>;
   const out: Record<number, number> = {};
   for (const r of rows) out[r.sender] = r.c;
+  return out;
+}
+
+export function unreadGroupCounts(me: number): Record<number, number> {
+  const rows = db
+    .prepare<[number, number]>(
+      `SELECT group_id as gid, COUNT(*) as c FROM messages
+       WHERE group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+         AND sender != ?
+       GROUP BY group_id`
+    )
+    .all(me, me) as Array<{ gid: number; c: number }>;
+  const out: Record<number, number> = {};
+  for (const r of rows) out[r.gid] = r.c;
   return out;
 }
