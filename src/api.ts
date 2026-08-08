@@ -58,7 +58,7 @@ function publicUser(u: User) {
 // ---------------------------------------------------------------------------
 
 api.get("/config", (_req, res) => {
-  res.json({ ok: true, app: "پیام", bot: botUsername ? `@${botUsername}` : null });
+  res.json({ ok: true, app: "Furina mind", bot: botUsername ? `@${botUsername}` : null });
 });
 
 // ---------------------------------------------------------------------------

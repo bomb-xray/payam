@@ -160,8 +160,10 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
       const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 4096) : "";
       if (!to || !text) return;
       const peer = getUserById(to);
-      if (!peer || peer.id === me.id) return;
+      if (!peer) return;
       const row = insertMessage(me.id, peer.id, text);
+      // پیام به خود (Saved Messages): بلافاصله خوانده‌شده است
+      if (peer.id === me.id) markRead(me.id, me.id);
       const event = {
         t: "msg",
         id: row.id,
@@ -169,7 +171,7 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
         to: peer.id,
         text: row.text,
         ts: row.ts,
-        read: false,
+        read: peer.id === me.id,
       };
       sendToUser(peer.id, event);
       // تأیید به فرستنده (و سایر دستگاه‌هایش)

@@ -237,7 +237,8 @@ export function unreadCounts(me: number): Record<number, number> {
   const rows = db
     .prepare<[number]>(
       `SELECT sender, COUNT(*) AS c FROM messages
-       WHERE recipient = ? AND read_at IS NULL GROUP BY sender`
+       WHERE recipient = ? AND read_at IS NULL AND sender != recipient
+       GROUP BY sender`
     )
     .all(me) as Array<{ sender: number; c: number }>;
   const out: Record<number, number> = {};

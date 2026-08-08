@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   initWs(server);
 
   server.listen(config.port, "0.0.0.0", () => {
-    console.log(`✅ پیام‌رسان «پیام» بالا آمد: http://0.0.0.0:${config.port}`);
+    console.log(`✅ پیام‌رسان «Furina mind» بالا آمد: http://0.0.0.0:${config.port}`);
   });
 
   const shutdown = () => {

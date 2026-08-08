@@ -31,11 +31,16 @@ export async function sendLoginCode(tgId: number, code: string): Promise<boolean
   try {
     await bot.api.sendMessage(
       tgId,
-      `🔑 کد ورود شما به پیام‌رسان «پیام»:\n\n` +
-        `<b>${code}</b>\n\n` +
+      `🔑 کد ورود شما به پیام‌رسان <b>Furina mind</b>:\n\n` +
+        `<code>${code}</code>\n\n` +
         `⏱ این کد ۵ دقیقه اعتبار دارد و فقط یک‌بار مصرف می‌شود.\n` +
         `⚠️ اگر شما درخواست ورود ندادید، این پیام را نادیده بگیرید.`,
-      { parse_mode: "HTML" }
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [[{ text: "📋 کپی کد", copy_text: { text: code } }]],
+        },
+      }
     );
     return true;
   } catch (e) {
@@ -72,7 +77,16 @@ async function connect(): Promise<void> {
 
   b.command("id", async (ctx) => {
     if (!ctx.from) return;
-    await ctx.reply(`🆔 آی‌دی عددی شما:\n${ctx.from.id}\n\nاین عدد را در صفحه‌ی ورود پیام‌رسان وارد کنید.`);
+    const id = String(ctx.from.id);
+    await ctx.reply(
+      `🆔 آی‌دی عددی شما:\n<code>${id}</code>\n\nاین عدد را در صفحه‌ی ورود Furina mind وارد کنید.`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [[{ text: "📋 کپی آی‌دی", copy_text: { text: id } }]],
+        },
+      }
+    );
   });
 
   b.command("start", async (ctx) => {
@@ -86,11 +100,12 @@ async function connect(): Promise<void> {
     const name = ctx.from.first_name ?? "";
     await ctx.reply(
       `سلام ${name}! 👋\n` +
-        `این باتِ احراز هویت پیام‌رسان «پیام» است.\n\n` +
+        `این باتِ احراز هویت پیام‌رسان <b>Furina mind</b> است.\n\n` +
         `📝 برای ساخت اکانت:\n` +
         `۱. دستور /id را بفرست تا آی‌دی عددی‌ات را ببینی\n` +
         `۲. آن را در صفحه‌ی ورود پیام‌رسان وارد کن\n` +
-        `۳. کدی که همین‌جا برایت می‌فرستم را در پیام‌رسان وارد کن`
+        `۳. کدی که همین‌جا برایت می‌فرستم را در پیام‌رسان وارد کن`,
+      { parse_mode: "HTML" }
     );
   });
 
@@ -113,7 +128,7 @@ export async function handleDeepLink(loginToken: string, tgId: number): Promise<
   const res = await completeLogin(loginToken, { expectedTgId: tgId }, fetchProfile);
   if ("error" in res) return null;
   return (
-    `✅ ورود موفق!\nحالا به پیام‌رسان «پیام» برگرد؛ خودکار وارد می‌شوی.\n\n` +
+    `✅ ورود موفق!\nحالا به <b>Furina mind</b> برگرد؛ خودکار وارد می‌شوی.\n\n` +
     `👤 نام: ${res.user.name || "—"}`
   );
 }

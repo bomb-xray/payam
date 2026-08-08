@@ -24,6 +24,9 @@ const state = {
   lastTypingSent: 0,
 };
 
+const SAVED_NAME = "ذخیره‌شده‌ها";
+const isSavedId = (id) => state.me && id === state.me.id;
+
 // ---------------------------------------------------------------------------
 // ابزارها
 // ---------------------------------------------------------------------------
@@ -294,7 +297,7 @@ function handleEvent(msg) {
     }
 
     case "typing": {
-      if (state.peer === msg.from) showTyping();
+      if (state.peer === msg.from && msg.from !== state.me.id) showTyping();
       break;
     }
 
@@ -315,76 +318,99 @@ function handleEvent(msg) {
 // سایدبار
 // ---------------------------------------------------------------------------
 
-function renderSidebar() {
-  const list = $("user-list");
-  const q = $("search").value.trim().toLowerCase();
-  list.innerHTML = "";
+function buildConvItem(u, opts = {}) {
+  const saved = !!opts.saved;
+  const item = document.createElement("div");
+  item.className = "user-item" + (state.peer === u.id ? " active" : "");
+  item.addEventListener("click", () => openChat(u.id));
 
-  const users = [...state.users.values()]
-    .filter((u) => !q || u.name.toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q))
-    .sort((a, b) => {
-      const ta = state.lastMsg.get(a.id)?.ts || a.created_at || 0;
-      const tb = state.lastMsg.get(b.id)?.ts || b.created_at || 0;
-      return tb - ta;
-    });
-
-  if (users.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "dim";
-    empty.style.cssText = "text-align:center;padding:24px 12px;line-height:2";
-    empty.textContent = q
-      ? "نتیجه‌ای پیدا نشد"
-      : "هنوز کاربر دیگری عضو نشده. دوستان‌تان را دعوت کنید! 🎉";
-    list.appendChild(empty);
-    return;
-  }
-
-  for (const u of users) {
-    const item = document.createElement("div");
-    item.className = "user-item" + (state.peer === u.id ? " active" : "");
-    item.addEventListener("click", () => openChat(u.id));
-
-    const avatar = document.createElement("div");
-    avatar.className = "avatar";
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  if (saved) {
+    avatar.textContent = "🔖";
+    avatar.style.background = "linear-gradient(135deg, #2b5278, #64b5ef)";
+  } else {
     setAvatar(avatar, u);
     if (u.online) {
       const dot = document.createElement("span");
       dot.className = "online-dot";
       avatar.appendChild(dot);
     }
+  }
 
-    const meta = document.createElement("div");
-    meta.className = "user-meta";
+  const meta = document.createElement("div");
+  meta.className = "user-meta";
 
-    const top = document.createElement("div");
-    top.className = "user-top";
-    const name = document.createElement("div");
-    name.className = "user-name";
-    name.textContent = u.name || `کاربر ${u.id}`;
-    const time = document.createElement("div");
-    time.className = "user-time";
-    const last = state.lastMsg.get(u.id);
-    time.textContent = last ? fmtTime(last.ts) : "";
-    top.append(name, time);
+  const last = state.lastMsg.get(u.id);
 
-    const bottom = document.createElement("div");
-    bottom.className = "user-bottom";
-    const preview = document.createElement("div");
-    preview.className = "user-preview";
-    preview.textContent = last ? (last.out ? "شما: " : "") + last.text : lastSeenText(u);
-    bottom.appendChild(preview);
+  const top = document.createElement("div");
+  top.className = "user-top";
+  const name = document.createElement("div");
+  name.className = "user-name";
+  name.textContent = saved ? SAVED_NAME : u.name || `کاربر ${u.id}`;
+  const time = document.createElement("div");
+  time.className = "user-time";
+  time.textContent = last ? fmtTime(last.ts) : "";
+  top.append(name, time);
 
-    const unread = state.unread.get(u.id) || 0;
-    if (unread > 0) {
-      const badge = document.createElement("div");
-      badge.className = "badge";
-      badge.textContent = fa(unread);
-      bottom.appendChild(badge);
-    }
+  const bottom = document.createElement("div");
+  bottom.className = "user-bottom";
+  const preview = document.createElement("div");
+  preview.className = "user-preview";
+  preview.textContent = last
+    ? (last.out ? "شما: " : "") + last.text
+    : saved
+      ? "یادداشت‌ها و پیام‌های ذخیره‌شده‌ی شما"
+      : lastSeenText(u);
+  bottom.appendChild(preview);
 
-    meta.append(top, bottom);
-    item.append(avatar, meta);
-    list.appendChild(item);
+  const unread = saved ? 0 : state.unread.get(u.id) || 0;
+  if (unread > 0) {
+    const badge = document.createElement("div");
+    badge.className = "badge";
+    badge.textContent = fa(unread);
+    bottom.appendChild(badge);
+  }
+
+  meta.append(top, bottom);
+  item.append(avatar, meta);
+  return item;
+}
+
+function renderSidebar() {
+  const list = $("user-list");
+  const q = $("search").value.trim().toLowerCase();
+  list.innerHTML = "";
+
+  const savedMatches =
+    state.me && (!q || SAVED_NAME.includes(q) || "saved".includes(q));
+
+  const users = [...state.users.values()]
+    .filter((u) => !q || u.name.toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q))
+    .sort((a, b) => {
+      const ta = state.lastMsg.get(a.id)?.ts || 0;
+      const tb = state.lastMsg.get(b.id)?.ts || 0;
+      return tb - ta;
+    });
+
+  if (savedMatches) {
+    list.appendChild(buildConvItem({ id: state.me.id }, { saved: true }));
+  }
+
+  for (const u of users) list.appendChild(buildConvItem(u));
+
+  if (!savedMatches && users.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "dim";
+    empty.style.cssText = "text-align:center;padding:24px 12px;line-height:2";
+    empty.textContent = "نتیجه‌ای پیدا نشد";
+    list.appendChild(empty);
+  } else if (!q && users.length === 0) {
+    const hint = document.createElement("div");
+    hint.className = "dim";
+    hint.style.cssText = "text-align:center;padding:24px 12px;line-height:2";
+    hint.textContent = "هنوز کاربر دیگری عضو نشده. دوستان‌تان را دعوت کنید! 🎉";
+    list.appendChild(hint);
   }
 }
 
@@ -395,7 +421,8 @@ $("search").addEventListener("input", renderSidebar);
 // ---------------------------------------------------------------------------
 
 async function openChat(peerId) {
-  const peer = state.users.get(peerId);
+  const saved = isSavedId(peerId);
+  const peer = saved ? state.me : state.users.get(peerId);
   if (!peer) return;
   state.peer = peerId;
   state.unread.set(peerId, 0);
@@ -405,8 +432,15 @@ async function openChat(peerId) {
   $("chat-view").classList.remove("hidden");
   $("app").classList.add("chat-open");
 
-  $("peer-name").textContent = peer.name || `کاربر ${peer.id}`;
-  setAvatar($("peer-avatar"), peer);
+  $("peer-name").textContent = saved ? SAVED_NAME : peer.name || `کاربر ${peer.id}`;
+  const avatarEl = $("peer-avatar");
+  if (saved) {
+    avatarEl.textContent = "🔖";
+    avatarEl.style.background = "linear-gradient(135deg, #2b5278, #64b5ef)";
+  } else {
+    avatarEl.style.background = "";
+    setAvatar(avatarEl, peer);
+  }
   renderPeerStatus();
 
   const box = $("messages");
@@ -438,9 +472,14 @@ $("btn-back-chat").addEventListener("click", () => {
 });
 
 function renderPeerStatus() {
+  const el = $("peer-status");
+  if (isSavedId(state.peer)) {
+    el.textContent = "☁️ یادداشت‌های شخصی شما — فقط خودتان آن‌ها را می‌بینید";
+    el.style.color = "";
+    return;
+  }
   const u = state.users.get(state.peer);
   if (!u) return;
-  const el = $("peer-status");
   if (Date.now() < state.typingUntil) {
     el.textContent = "در حال نوشتن…";
     el.style.color = "var(--accent)";
@@ -571,7 +610,7 @@ $("input").addEventListener("input", () => {
   el.style.height = "auto";
   el.style.height = Math.min(el.scrollHeight, 130) + "px";
   const now = Date.now();
-  if (state.peer && now - state.lastTypingSent > 2000) {
+  if (state.peer && !isSavedId(state.peer) && now - state.lastTypingSent > 2000) {
     state.lastTypingSent = now;
     wsSend({ t: "typing", to: state.peer });
   }

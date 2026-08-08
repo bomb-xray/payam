@@ -84,6 +84,20 @@ function waitFor(pred, timeoutMs = 3000) {
   await waitFor(() => got.readA);
   check("اعلان خواندن به علی رسید", got.readA.by === B.user.id);
 
+  // Saved Messages: علی برای خودش پیام می‌فرستد
+  wsA.send(JSON.stringify({ t: "msg", to: A.user.id, text: "یادداشت شخصی من", temp: "TMP2" }));
+  await waitFor(() => got.ackA && got.ackA.temp === "TMP2");
+  check("پیام به خود (Saved) تأیید شد", got.ackA.id > 0 && got.ackA.to === A.user.id);
+
+  const resSelf = await fetch(`http://127.0.0.1:${PORT}/api/messages?with=${A.user.id}`, {
+    headers: { Authorization: "Bearer " + A.sessionToken },
+  });
+  const histSelf = await resSelf.json();
+  check(
+    "تاریخچه‌ی Saved شامل یادداشت است",
+    histSelf.ok && histSelf.messages.some((m) => m.text === "یادداشت شخصی من" && m.read_at !== null)
+  );
+
   // خروج رضا → presence آفلاین برای علی
   wsB.close();
   await waitFor(() => got.presence && got.presence.online === false);
