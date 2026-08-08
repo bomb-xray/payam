@@ -17,7 +17,7 @@ const state = {
   msgs: [],
   peer: null, // private chat id
   group: null, // group chat id
-  activeTab: "chats", // chats | groups | channels | contacts
+  activeTab: "all", // all | chats | groups | channels | contacts
   ws: null,
   wsRetry: 0,
   loginToken: null,
@@ -168,7 +168,27 @@ function lastSeenText(u){ if(!state.settings.showOnline) return ""; if(u.online)
 // ---------------------------------------------------------------------------
 // ورود
 // ---------------------------------------------------------------------------
-async function showLogin(){ $("login").classList.remove("hidden"); $("app").classList.add("hidden"); try{ const c=await api("/config"); if(c.bot){ $("bot-username").textContent=c.bot; const cc=$("cc-bot-username"); if(cc) cc.textContent=c.bot; if($("about-bot")) $("about-bot").textContent=`🤖 بات: ${c.bot}`; } }catch{} }
+async function showLogin(){
+  $("login").classList.remove("hidden"); $("app").classList.add("hidden");
+  try{
+    const c=await api("/config");
+    const botName = c.bot || "@YourBot";
+    const els = ["bot-username","bot-username-2","cc-bot-username","about-bot"];
+    for(const id of els){
+      const el=$(id);
+      if(!el) continue;
+      if(id==="about-bot") el.textContent=`🤖 بات: ${botName}`;
+      else el.textContent=botName;
+    }
+    // اگر بات وصل نیست، یک راهنما
+    if(!c.bot){
+      const b=$("bot-username"); if(b) b.textContent="بات هنوز وصل نشده — بعداً دوباره چک کن";
+      const b2=$("bot-username-2"); if(b2) b2.textContent="نامشخص";
+    }
+  }catch(e){
+    const b=$("bot-username"); if(b) b.textContent="خطا در گرفتن نام بات — تو تلگرام سرچ کن";
+  }
+}
 function showStep(s){ $("login-step1").classList.toggle("hidden", s!==1); $("login-step2").classList.toggle("hidden", s!==2); }
 $("btn-request").addEventListener("click", async()=>{ const tgId=$("tg-id").value.trim(); $("login-error").textContent=""; if(!/^\d+$/.test(tgId)){ $("login-error").textContent="آی‌دی عددی وارد کنید"; return; } $("btn-request").disabled=true; try{ const r=await api("/auth/request",{method:"POST",body:JSON.stringify({tg_id:tgId})}); state.loginToken=r.login_token; $("deep-link").href=r.deep_link; showStep(2); startCountdown(r.expires_in); startPolling(); $("code").focus(); }catch(e){ $("login-error").textContent=e.message; } $("btn-request").disabled=false; });
 $("tg-id").addEventListener("keydown", e=>{ if(e.key==="Enter") $("btn-request").click(); });
@@ -298,6 +318,7 @@ function updateTitleBadge(){ if(!state.settings.showUnreadBadge){ document.title
 function setActiveTab(tab){
   state.activeTab=tab;
   document.querySelectorAll(".sidebar-tab").forEach(el=> el.classList.toggle("active", el.dataset.tab===tab));
+  const all=$("all-list"); if(all) all.classList.toggle("hidden", tab!=="all");
   $("user-list").classList.toggle("hidden", tab!=="chats");
   $("group-list").classList.toggle("hidden", tab!=="groups");
   $("channel-list").classList.toggle("hidden", tab!=="channels");
@@ -375,30 +396,56 @@ function buildContactItem(c){
 function renderSidebar(){
   const q=$("search").value.trim().toLowerCase();
   // چت‌ها
-  const ul=$("user-list"); ul.innerHTML="";
-  const savedMatches= state.me && (!q || SAVED_NAME.includes(q) || "saved".includes(q));
-  const users=[...state.users.values()].filter(u=> !q || u.name.toLowerCase().includes(q) || (u.username||"").toLowerCase().includes(q)).sort((a,b)=>{ const ta=state.lastMsg.get(a.id)?.ts||0, tb=state.lastMsg.get(b.id)?.ts||0; return tb-ta; });
-  if(savedMatches) ul.appendChild(buildConvItem({id:state.me.id}, {saved:true}));
-  for(const u of users) ul.appendChild(buildConvItem(u));
-  if(!savedMatches && users.length===0 && state.activeTab==="chats"){ const d=document.createElement("div"); d.className="dim"; d.style.cssText="text-align:center;padding:24px 12px;line-height:2"; d.textContent=q?"نتیجه‌ای نیست":"هنوز کسی نیست — دوستات رو دعوت کن!"; ul.appendChild(d); }
+  const ul=$("user-list"); if(ul){ ul.innerHTML=""; const savedMatches= state.me && (!q || SAVED_NAME.includes(q) || "saved".includes(q)); const users=[...state.users.values()].filter(u=> !q || u.name.toLowerCase().includes(q) || (u.username||"").toLowerCase().includes(q)).sort((a,b)=>{ const ta=state.lastMsg.get(a.id)?.ts||0, tb=state.lastMsg.get(b.id)?.ts||0; return tb-ta; }); if(savedMatches) ul.appendChild(buildConvItem({id:state.me.id}, {saved:true})); for(const u of users) ul.appendChild(buildConvItem(u)); if(!savedMatches && users.length===0 && state.activeTab==="chats"){ const d=document.createElement("div"); d.className="dim"; d.style.cssText="text-align:center;padding:24px 12px;line-height:2"; d.textContent=q?"نتیجه‌ای نیست":"هنوز کسی نیست — دوستات رو دعوت کن!"; ul.appendChild(d); } }
 
   // گروه‌ها
-  const gl=$("group-list"); gl.innerHTML="";
-  const groups=[...state.groups.values()].filter(g=>g.type==="group" && (!q || g.name.toLowerCase().includes(q))).sort((a,b)=>{ const ta=state.lastGroupMsg.get(a.id)?.ts||0, tb=state.lastGroupMsg.get(b.id)?.ts||0; return tb-ta; });
-  if(groups.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= q? "گروهی پیدا نشد" : "<b>گروهی نداری</b><br>دکمه + بزن و گروه بساز"; gl.appendChild(d); }
-  else for(const g of groups) gl.appendChild(buildGroupItem(g));
+  const gl=$("group-list"); if(gl){ gl.innerHTML=""; const groups=[...state.groups.values()].filter(g=>g.type==="group" && (!q || g.name.toLowerCase().includes(q))).sort((a,b)=>{ const ta=state.lastGroupMsg.get(a.id)?.ts||0, tb=state.lastGroupMsg.get(b.id)?.ts||0; return tb-ta; }); if(groups.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= q? "گروهی پیدا نشد" : "<b>گروهی نداری</b><br>دکمه + بزن و گروه بساز"; gl.appendChild(d); } else for(const g of groups) gl.appendChild(buildGroupItem(g)); }
 
   // کانال‌ها
-  const cl=$("channel-list"); cl.innerHTML="";
-  const channels=[...state.groups.values()].filter(g=>g.type==="channel" && (!q || g.name.toLowerCase().includes(q))).sort((a,b)=> (state.lastGroupMsg.get(b.id)?.ts||0)-(state.lastGroupMsg.get(a.id)?.ts||0));
-  if(channels.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= q? "کانالی نیست" : "<b>کانالی نداری</b><br>با + کانال بساز"; cl.appendChild(d); }
-  else for(const g of channels) cl.appendChild(buildGroupItem(g));
+  const cl=$("channel-list"); if(cl){ cl.innerHTML=""; const channels=[...state.groups.values()].filter(g=>g.type==="channel" && (!q || g.name.toLowerCase().includes(q))).sort((a,b)=> (state.lastGroupMsg.get(b.id)?.ts||0)-(state.lastGroupMsg.get(a.id)?.ts||0)); if(channels.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= q? "کانالی نیست" : "<b>کانالی نداری</b><br>با + کانال بساز"; cl.appendChild(d); } else for(const g of channels) cl.appendChild(buildGroupItem(g)); }
 
   // مخاطبین
-  const cot=$("contact-list"); cot.innerHTML="";
-  const contacts=[...state.contacts.values()].filter(c=> !q || c.name.toLowerCase().includes(q) || (c.phone||"").includes(q)).sort((a,b)=> a.name.localeCompare(b.name));
-  if(contacts.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= `<b>مخاطبی نداری</b><br>از بات تلگرام ایمپورت کن<br><span class="link-chip" style="margin-top:8px;display:inline-flex">برو تو بات و دکمه 📇 اشتراک مخاطب رو بزن</span>`; cot.appendChild(d); }
-  else for(const c of contacts) cot.appendChild(buildContactItem(c));
+  const cot=$("contact-list"); if(cot){ cot.innerHTML=""; const contacts=[...state.contacts.values()].filter(c=> !q || c.name.toLowerCase().includes(q) || (c.phone||"").includes(q)).sort((a,b)=> a.name.localeCompare(b.name)); if(contacts.length===0){ const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= `<b>مخاطبی نداری</b><br>از بات تلگرام ایمپورت کن<br><span class="link-chip" style="margin-top:8px;display:inline-flex">برو تو بات و دکمه 📇 اشتراک مخاطب رو بزن</span>`; cot.appendChild(d); } else for(const c of contacts) cot.appendChild(buildContactItem(c)); }
+
+  // همه — ترکیب همه چیز بر اساس آخرین پیام
+  const al=$("all-list"); if(al){
+    al.innerHTML="";
+    const items=[];
+    // ذخیره‌شده‌ها
+    if(state.me && (!q || SAVED_NAME.includes(q))){
+      const last=state.lastMsg.get(state.me.id);
+      items.push({type:"saved", id:state.me.id, ts:last?.ts||0, last});
+    }
+    // چت‌های شخصی
+    for(const u of [...state.users.values()].filter(u=> !q || u.name.toLowerCase().includes(q) || (u.username||"").toLowerCase().includes(q))){
+      const last=state.lastMsg.get(u.id);
+      items.push({type:"private", user:u, id:u.id, ts:last?.ts||0, last});
+    }
+    // گروه و کانال
+    for(const g of [...state.groups.values()].filter(g=> !q || g.name.toLowerCase().includes(q))){
+      const last=state.lastGroupMsg.get(g.id);
+      items.push({type:g.type==="channel"?"channel":"group", group:g, id:g.id, ts:last?.ts||0, last});
+    }
+    // مرتب بر اساس زمان
+    items.sort((a,b)=> b.ts - a.ts);
+    // اگه هیچی نیست و سرچ نیست، مخاطبین رو هم نشون بده که دعوت کنه
+    if(items.length===0){
+      const d=document.createElement("div"); d.className="empty-contacts"; d.innerHTML= q? "چیزی پیدا نشد" : "<b>هنوز چیزی نداری</b><br>گروه بساز یا از بات مخاطب ایمپورت کن";
+      al.appendChild(d);
+    }else{
+      // نمایش حداکثر 100 تای اخیر
+      for(const it of items.slice(0,100)){
+        if(it.type==="saved") al.appendChild(buildConvItem({id:state.me.id}, {saved:true}));
+        else if(it.type==="private") al.appendChild(buildConvItem(it.user));
+        else al.appendChild(buildGroupItem(it.group));
+      }
+      // اگه سرچ خالیه و مخاطب هم داریم، بخش مخاطبین سریع هم اضافه کن
+      if(!q && state.contacts.size>0 && items.length<20){
+        const sep=document.createElement("div"); sep.className="day-sep"; sep.textContent="مخاطبین پیشنهادی"; al.appendChild(sep);
+        for(const c of [...state.contacts.values()].slice(0,5)) al.appendChild(buildContactItem(c));
+      }
+    }
+  }
 }
 $("search").addEventListener("input", renderSidebar);
 

@@ -16,10 +16,14 @@
       <p class="sub">پیام‌رسان ابری با احراز هویت تلگرام — گروه، کانال، مخاطبین</p>
       <div id="login-step1">
         <ol class="steps">
-          <li>بات <b id="bot-username" dir="ltr">@…</b> را استارت کن</li>
-          <li>دستور <code dir="ltr">/id</code> را بفرست</li>
+          <li>بات <b id="bot-username" dir="ltr" style="direction:ltr; unicode-bidi:plaintext; background:var(--panel-2); padding:2px 8px; border-radius:6px;">در حال بارگذاری…</b> را در تلگرام استارت کن</li>
+          <li>دستور <code dir="ltr">/id</code> را بفرست تا آی‌دی عددی‌ات را بگیرید</li>
           <li>آی‌دی عددی رو این‌جا وارد کن</li>
         </ol>
+        <div id="bot-info-box" class="settings-card" style="margin: 0 0 14px; padding:10px; font-size:0.85rem; line-height:1.7; text-align:right">
+          <span class="dim">بات:</span> <b id="bot-username-2" dir="ltr" style="color:var(--accent)">...</b>
+          <div class="dim" style="font-size:0.78rem; margin-top:4px">اگر بالا لود نشد، تو تلگرام سرچ کن همین یوزرنیم رو</div>
+        </div>
         <input id="tg-id" inputmode="numeric" autocomplete="off" placeholder="آی‌دی عددی تلگرام" dir="ltr" />
         <button id="btn-request" class="primary">دریافت کد ورود 🔑</button>
         <p id="login-error" class="error"></p>
@@ -48,7 +52,8 @@
       </header>
 
       <div class="sidebar-tabs">
-        <button data-tab="chats" class="sidebar-tab active">💬 چت‌ها</button>
+        <button data-tab="all" class="sidebar-tab active">🌐 همه</button>
+        <button data-tab="chats" class="sidebar-tab">💬 چت‌ها</button>
         <button data-tab="groups" class="sidebar-tab">👥 گروه‌ها</button>
         <button data-tab="channels" class="sidebar-tab">📢 کانال</button>
         <button data-tab="contacts" class="sidebar-tab">📇 مخاطبین</button>
@@ -58,7 +63,8 @@
         <input id="search" placeholder="جستجو در چت‌ها، گروه‌ها، مخاطبین…" autocomplete="off" />
       </div>
 
-      <div id="user-list" class="user-list"></div>
+      <div id="all-list" class="user-list"></div>
+      <div id="user-list" class="user-list hidden"></div>
       <div id="group-list" class="user-list hidden"></div>
       <div id="channel-list" class="user-list hidden"></div>
       <div id="contact-list" class="user-list hidden"></div>
