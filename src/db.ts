@@ -8,6 +8,7 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 export const db = new Database(path.join(config.dataDir, "payam.db"));
 db.pragma("journal_mode = WAL");
 
+// مرحله ۱: جداول پایه (بدون ایندکس‌هایی که به ستون جدید وابستند — برای سازگاری با دیتابیس قدیمی)
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,13 +41,8 @@ CREATE TABLE IF NOT EXISTS messages (
   recipient INTEGER NOT NULL REFERENCES users(id),
   text      TEXT NOT NULL,
   ts        INTEGER NOT NULL,
-  read_at   INTEGER,
-  group_id  INTEGER,
-  reply_to  INTEGER
+  read_at   INTEGER
 );
-CREATE INDEX IF NOT EXISTS idx_msg_sender    ON messages(sender, recipient, ts);
-CREATE INDEX IF NOT EXISTS idx_msg_recipient ON messages(recipient, sender, read_at);
-CREATE INDEX IF NOT EXISTS idx_msg_group     ON messages(group_id, ts);
 
 CREATE TABLE IF NOT EXISTS contacts (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,9 +52,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   name             TEXT NOT NULL,
   alias            TEXT,
   tg_id            INTEGER,
-  created_at       INTEGER NOT NULL,
-  UNIQUE(owner_id, contact_user_id),
-  UNIQUE(owner_id, phone)
+  created_at       INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS groups (
@@ -66,7 +60,7 @@ CREATE TABLE IF NOT EXISTS groups (
   name         TEXT NOT NULL,
   description  TEXT DEFAULT '',
   creator_id   INTEGER NOT NULL REFERENCES users(id),
-  type         TEXT NOT NULL DEFAULT 'group', -- group | channel
+  type         TEXT NOT NULL DEFAULT 'group',
   invite_token TEXT UNIQUE,
   avatar       TEXT,
   created_at   INTEGER NOT NULL
@@ -75,19 +69,30 @@ CREATE TABLE IF NOT EXISTS groups (
 CREATE TABLE IF NOT EXISTS group_members (
   group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role      TEXT NOT NULL DEFAULT 'member', -- owner | admin | member
+  role      TEXT NOT NULL DEFAULT 'member',
   joined_at INTEGER NOT NULL,
   PRIMARY KEY (group_id, user_id)
 );
 `);
 
-// مایگریشن‌های سبک برای دیتابیس‌های قدیمی
+// مایگریشن‌های سبک برای دیتابیس‌های قدیمی — اضافه کردن ستون‌ها اگر نیستند
 try { db.prepare("ALTER TABLE messages ADD COLUMN group_id INTEGER").run(); } catch {}
 try { db.prepare("ALTER TABLE messages ADD COLUMN reply_to INTEGER").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN type TEXT NOT NULL DEFAULT 'group'").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN invite_token TEXT").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN description TEXT DEFAULT ''").run(); } catch {}
+try { db.prepare("ALTER TABLE groups ADD COLUMN avatar TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE contacts ADD COLUMN alias TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE contacts ADD COLUMN tg_id INTEGER").run(); } catch {}
+
+// ایندکس‌ها — بعد از مایگریشن تا اگر ستون نبود کرش نکنه
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_msg_sender ON messages(sender, recipient, ts)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_msg_recipient ON messages(recipient, sender, read_at)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_msg_group ON messages(group_id, ts)"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_invite ON groups(invite_token)"); } catch {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts(owner_id)"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_user ON contacts(owner_id, contact_user_id)"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_phone ON contacts(owner_id, phone)"); } catch {}
 
 // ---------------------------------------------------------------------------
 // تایپ‌ها
