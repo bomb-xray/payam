@@ -21,6 +21,7 @@ import {
   deleteSessionsExcept,
   getLastMessages,
   getAllMessagesForUser,
+  insertMessage,
   User,
 } from "./db";
 import crypto from "crypto";
@@ -213,6 +214,40 @@ api.post("/sessions/revoke-others", authed, (req, res) => {
   const curHash = crypto.createHash("sha256").update(token).digest("hex");
   const count = deleteSessionsExcept(me.id, curHash);
   res.json({ ok: true, revoked: count });
+});
+
+api.post("/messages", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const to = Number(req.body?.to);
+  const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 4096) : "";
+  if (!to || !text) return fail(res, 400, "bad_input", "مقصد یا متن نامعتبر است.");
+  const peer = to ? getUserById(to) : undefined;
+  if (!peer) return fail(res, 404, "no_peer", "کاربر مقصد پیدا نشد.");
+
+  try {
+    const row = insertMessage(me.id, peer.id, text);
+    if (peer.id === me.id) markRead(me.id, me.id);
+
+    const event = {
+      t: "msg",
+      id: row.id,
+      from: me.id,
+      to: peer.id,
+      text: row.text,
+      ts: row.ts,
+      read: peer.id === me.id,
+    };
+
+    // اطلاع به گیرنده و به بقیه دستگاه‌های فرستنده از طریق WS
+    if (peer.id !== me.id) {
+      notifyUser(peer.id, event);
+    }
+    // به همه بگو پیام جدید (ack برای فرستنده فعلاً از طریق HTTP response است)
+    return res.json({ ok: true, message: row, event });
+  } catch (e) {
+    console.error("[api] post /messages", e);
+    return fail(res, 500, "internal");
+  }
 });
 
 api.get("/conversations", authed, (req, res) => {

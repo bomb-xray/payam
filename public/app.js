@@ -579,20 +579,28 @@ function handleEvent(msg) {
     case "msg": {
       if (msg.ack) {
         onAck(msg);
-      } else if (msg.from !== state.me.id) {
-        state.lastMsg.set(msg.from, { text: msg.text, ts: msg.ts, out: false });
-        if (state.peer === msg.from) {
-          state.msgs.push(msg);
-          appendBubble(msg);
-          scrollDown();
-          if(state.settings.sendReadReceipts) wsSend({ t: "read", peer: msg.from });
-        } else {
-          state.unread.set(msg.from, (state.unread.get(msg.from) || 0) + 1);
-          playSound();
-          notifyDesktop(msg);
+      } else {
+        const isSelfCloud = msg.from === state.me.id && msg.to === state.me.id;
+        const isFromOther = msg.from !== state.me.id;
+        if (isFromOther || isSelfCloud) {
+          // جلوگیری از دوبار اضافه شدن اگر همین آیدی رو داریم
+          if (state.msgs.some(m=>m.id===msg.id)) break;
+          const isOutSelf = isSelfCloud;
+          state.lastMsg.set(isOutSelf ? msg.to : msg.from, { text: msg.text, ts: msg.ts, out: isOutSelf });
+          const isOpen = state.peer === (isOutSelf ? msg.to : msg.from) || (isSelfCloud && isSavedId(state.peer));
+          if (isOpen) {
+            state.msgs.push({ id: msg.id, sender: msg.from, recipient: msg.to, text: msg.text, ts: msg.ts, read_at: msg.read ? Date.now() : null });
+            appendBubble(state.msgs[state.msgs.length-1]);
+            scrollDown();
+            if(isFromOther && state.settings.sendReadReceipts) wsSend({ t: "read", peer: msg.from });
+          } else if(isFromOther) {
+            state.unread.set(msg.from, (state.unread.get(msg.from) || 0) + 1);
+            playSound();
+            notifyDesktop(msg);
+          }
+          renderSidebar();
+          updateTitleBadge();
         }
-        renderSidebar();
-        updateTitleBadge();
       }
       break;
     }
@@ -861,24 +869,32 @@ function onAck(msg) {
   const el = msg.temp ? state.pending.get(msg.temp) : null;
   if (el) {
     state.pending.delete(msg.temp);
-    el.classList.remove("pending");
-    const m = { id: msg.id, sender: state.me.id, recipient: msg.to, text: msg.text, ts: msg.ts, read_at: null };
-    state.msgs.push(m);
+    // حذف پیام خوش‌بینانه id=-1 از آرایه و جایگزینی با پیام واقعی
+    const idx = state.msgs.findIndex(x => x.id === -1 && x.text === msg.text && x.recipient === msg.to);
+    const m = { id: msg.id, sender: state.me.id, recipient: msg.to, text: msg.text, ts: msg.ts, read_at: isSavedId(msg.to) ? Date.now() : null };
+    if (idx !== -1) state.msgs[idx] = m;
+    else state.msgs.push(m);
     const fresh = buildBubble(m);
+    fresh.classList.remove("pending");
     el.replaceWith(fresh);
-  } else if (msg.to === state.peer || state.msgs.some((x) => x.recipient === msg.to)) {
-    const m = { id: msg.id, sender: state.me.id, recipient: msg.to, text: msg.text, ts: msg.ts, read_at: null };
-    state.msgs.push(m);
-    if (msg.to === state.peer) {
-      appendBubble(m);
-      scrollDown();
+  } else {
+    // اگر temp نداشتیم (مثلاً از تب دیگر یا fallback HTTP) — بررسی تکراری نبودن
+    if (state.msgs.some(x => x.id === msg.id)) {
+      // تکراری
+    } else if (msg.to === state.peer || isSavedId(msg.to) || state.msgs.some((x) => x.recipient === msg.to)) {
+      const m = { id: msg.id, sender: state.me.id, recipient: msg.to, text: msg.text, ts: msg.ts, read_at: isSavedId(msg.to) ? Date.now() : null };
+      state.msgs.push(m);
+      if (msg.to === state.peer) {
+        appendBubble(m);
+        scrollDown();
+      }
     }
   }
   state.lastMsg.set(msg.to, { text: msg.text, ts: msg.ts, out: true });
   renderSidebar();
 }
 
-function sendMessage() {
+async function sendMessage() {
   const input = $("input");
   const text = input.value.trim();
   if (!text || !state.peer) return;
@@ -894,7 +910,37 @@ function sendMessage() {
   scrollDown(true);
   state.lastMsg.set(state.peer, { text, ts: optimistic.ts, out: true });
   renderSidebar();
+
+  let acked = false;
+  const checkAck = () => {
+    if (state.pending.has(temp)) {
+      // هنوز ack نیومده — تلاش HTTP fallback
+      console.warn("[send] WS ack timeout, trying HTTP fallback for", temp);
+      api("/messages", { method: "POST", body: JSON.stringify({ to: state.peer, text }) })
+        .then(r => {
+          if (!state.pending.has(temp)) return;
+          // شبیه ack رفتار کن
+          onAck({ id: r.message.id, to: state.peer, text: r.message.text, ts: r.message.ts, temp });
+          acked = true;
+        })
+        .catch(e => {
+          console.error("HTTP fallback failed", e);
+          // اگر بازم نشد، pending رو قرمز کن
+          const pend = state.pending.get(temp);
+          if (pend) {
+            pend.style.border = "1px solid #e56555";
+            pend.title = "ارسال ناموفق — دوباره تلاش کن";
+          }
+        });
+    }
+  };
+
   wsSend({ t: "msg", to: state.peer, text, temp });
+
+  // اگر بعد 2.5 ثانیه ack نیومد، fallback
+  setTimeout(() => {
+    if (!acked && state.pending.has(temp)) checkAck();
+  }, 2500);
 }
 
 $("btn-send").addEventListener("click", sendMessage);

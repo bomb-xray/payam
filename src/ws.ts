@@ -162,10 +162,21 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
       const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 4096) : "";
       if (!to || !text) return;
       const peer = getUserById(to);
-      if (!peer) return;
-      const row = insertMessage(me.id, peer.id, text);
-      // پیام به خود (Saved Messages): بلافاصله خوانده‌شده است
+      if (!peer) {
+        send(ws, { t: "error", error: "no_peer" });
+        return;
+      }
+      let row;
+      try {
+        row = insertMessage(me.id, peer.id, text);
+      } catch (e) {
+        console.error("[ws] insertMessage failed", e);
+        send(ws, { t: "error", error: "db_fail" });
+        return;
+      }
+      // پیام به خود (Saved Messages): بلافاصله خوانده‌شده است ولی باید ابری ذخیره شود
       if (peer.id === me.id) markRead(me.id, me.id);
+
       const event = {
         t: "msg",
         id: row.id,
@@ -175,9 +186,24 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
         ts: row.ts,
         read: peer.id === me.id,
       };
-      sendToUser(peer.id, event);
-      // تأیید به فرستنده (و سایر دستگاه‌هایش)
-      sendToUser(me.id, { ...event, ack: true, temp: msg.temp ?? null });
+
+      if (peer.id === me.id) {
+        // ذخیره‌شده‌ها: فقط یک ack مستقیم به فرستنده + پخش به بقیه دستگاه‌های خودش
+        const ack = { ...event, ack: true, temp: msg.temp ?? null };
+        // تضمینی: مستقیم به همین سوکت
+        send(ws, ack);
+        // به بقیه سوکت‌های همین کاربر (اگر چند تب بازه)
+        sendToUser(me.id, ack, ws);
+        // برای دستگاه‌های دیگر، یک پیام معمولی هم بفرست تا در صورت نیاز به عنوان پیام جدید ببینند
+        // (کلاینت ما ack را هم به عنوان پیام جدید قبول می‌کند)
+        sendToUser(me.id, event, ws);
+      } else {
+        sendToUser(peer.id, event);
+        // تأیید به فرستنده (و سایر دستگاه‌هایش) — مستقیم + بقیه
+        const ack = { ...event, ack: true, temp: msg.temp ?? null };
+        send(ws, ack);
+        sendToUser(me.id, ack, ws);
+      }
       break;
     }
 
