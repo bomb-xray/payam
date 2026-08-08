@@ -19,6 +19,8 @@ import {
   updateUserName,
   listSessionsByUser,
   deleteSessionsExcept,
+  getLastMessages,
+  getAllMessagesForUser,
   User,
 } from "./db";
 import crypto from "crypto";
@@ -211,6 +213,18 @@ api.post("/sessions/revoke-others", authed, (req, res) => {
   const curHash = crypto.createHash("sha256").update(token).digest("hex");
   const count = deleteSessionsExcept(me.id, curHash);
   res.json({ ok: true, revoked: count });
+});
+
+api.get("/conversations", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const last = getLastMessages(me.id);
+  res.json({ ok: true, last });
+});
+
+api.get("/export", authed, (req, res) => {
+  const me: User = (req as any).user;
+  const messages = getAllMessagesForUser(me.id, 5000);
+  res.json({ ok: true, me: publicUser(me), messages, exported_at: Date.now() });
 });
 
 api.get("/messages", authed, (req, res) => {

@@ -253,6 +253,35 @@ export function deleteSessionsExcept(userId: number, keepHash: string): number {
   return info.changes;
 }
 
+export function getLastMessages(me: number): Record<number, MessageRow> {
+  // آخرین پیام هر مکالمه (شامل ذخیره‌شده‌ها)
+  const rows = db
+    .prepare<[number, number]>(
+      `SELECT * FROM messages
+       WHERE sender = ? OR recipient = ?
+       ORDER BY ts DESC`
+    )
+    .all(me, me) as MessageRow[];
+  const out: Record<number, MessageRow> = {};
+  for (const m of rows) {
+    const peer = m.sender === me ? m.recipient : m.sender;
+    if (out[peer]) continue;
+    // برای خود-پیام، peer = me، پس فقط یکبار
+    out[peer] = m;
+  }
+  return out;
+}
+
+export function getAllMessagesForUser(me: number, limit = 1000): MessageRow[] {
+  return db
+    .prepare<[number, number, number]>(
+      `SELECT * FROM messages
+       WHERE sender = ? OR recipient = ?
+       ORDER BY ts ASC LIMIT ?`
+    )
+    .all(me, me, limit) as MessageRow[];
+}
+
 export function unreadCounts(me: number): Record<number, number> {
   const rows = db
     .prepare<[number]>(

@@ -9,6 +9,7 @@ import {
   markRead,
   touchLastSeen,
   getUserById,
+  getLastMessages,
 } from "./db";
 
 interface PublicUser {
@@ -94,6 +95,7 @@ export function initWs(server: http.Server): void {
       me: publicUser({ ...user, online: true } as User),
       users: users.map(publicUser),
       unread: unreadCounts(user.id),
+      last: getLastMessages(user.id),
     });
 
     if (firstConn) {

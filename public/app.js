@@ -35,7 +35,7 @@ const isSavedId = (id) => state.me && id === state.me.id;
 
 const DEFAULT_SETTINGS = {
   theme: "dark", // dark | amoled | light
-  accent: "#5288c1",
+  accent: "#3a86c8", // روشن‌تر — قبلا تیره بود
   fontSize: "medium", // small | medium | large | xlarge
   pattern: true,
   animations: true,
@@ -54,7 +54,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const ACCENT_PRESETS = [
-  "#5288c1", "#64b5ef", "#3a7abf", "#2bbbad", "#4fae4e",
+  "#3a86c8", "#64b5ef", "#5288c1", "#2bbbad", "#4fae4e",
   "#e6a23c", "#e56555", "#a695e7", "#ee7aae", "#7bc862",
   "#6ec9cb", "#eda86c"
 ];
@@ -484,6 +484,22 @@ async function enterApp() {
     for (const u of r.users) state.users.set(u.id, u);
   } catch { }
 
+  // --- سیستم ابری: گرفتن آخرین پیام هر چت تا بعد رفرش پاک نشه ---
+  try{
+    const conv = await api("/conversations");
+    state.lastMsg.clear();
+    for(const [peerId, msg] of Object.entries(conv.last)){
+      const id = Number(peerId);
+      if(!msg) continue;
+      state.lastMsg.set(id, { text: msg.text, ts: msg.ts, out: msg.sender === state.me.id });
+    }
+    // اگر پیام ذخیره‌شده‌ها (به خود) هم هست
+    if(conv.last[state.me.id]){
+      const m=conv.last[state.me.id];
+      state.lastMsg.set(state.me.id, { text: m.text, ts: m.ts, out: true });
+    }
+  }catch(e){ console.warn("conv fetch fail", e); }
+
   renderSidebar();
   connectWs();
   refreshSettingsData();
@@ -531,6 +547,14 @@ function handleEvent(msg) {
       state.unread.clear();
       for (const [peer, count] of Object.entries(msg.unread)) {
         state.unread.set(Number(peer), count);
+      }
+      // اگر بک‌اند last فرستاد (سیستم ابری)
+      if (msg.last) {
+        for (const [peerId, m] of Object.entries(msg.last)) {
+          const id = Number(peerId);
+          if (!m) continue;
+          state.lastMsg.set(id, { text: m.text, ts: m.ts, out: m.sender === state.me.id });
+        }
       }
       renderSidebar();
       if (state.peer) renderPeerStatus();
@@ -1001,21 +1025,32 @@ function calcStorage(){
   }
 }
 
-function exportChats(){
-  const data={
-    exported_at: Date.now(),
-    me: state.me,
-    users: [...state.users.values()],
-    messages: state.msgs,
-    lastMsg: [...state.lastMsg.entries()],
-    unread: [...state.unread.entries()],
-  };
-  const blob=new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download=`furina-export-${Date.now()}.json`; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 2000);
-  toast("خروجی دانلود شد");
+async function exportChats(){
+  try{
+    const r = await api("/export");
+    const blob=new Blob([JSON.stringify(r,null,2)], {type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`furina-cloud-export-${Date.now()}.json`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    toast("✅ خروجی ابری دانلود شد — همه پیام‌ها توی سروره");
+  }catch{
+    // fallback local
+    const data={
+      exported_at: Date.now(),
+      me: state.me,
+      users: [...state.users.values()],
+      messages: state.msgs,
+      lastMsg: [...state.lastMsg.entries()],
+      unread: [...state.unread.entries()],
+    };
+    const blob=new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`furina-export-${Date.now()}.json`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    toast("خروجی محلی دانلود شد");
+  }
 }
 
 // ---------------------------------------------------------------------------
