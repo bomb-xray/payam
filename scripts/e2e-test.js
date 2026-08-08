@@ -62,7 +62,9 @@ function waitFor(pred, timeoutMs = 3000) {
   });
 
   await waitFor(() => got.helloA && got.helloB);
-  check("hello با فهرست کاربران و unread رسید", got.helloA.users.length === 1 && got.helloB.users.length === 1);
+  // بعد از فیکس حریم خصوصی، کاربر جدید به همه نشون داده نمیشه — فقط مخاطبین/هم‌گروهی‌ها/چت‌شده‌ها
+  // پس در تست e2e که دو کاربر تازه‌اند و هنوز چتی نداشتن، لیست ممکنه ۰ باشه، اوکیه
+  check("hello با فهرست کاربران و unread رسید", got.helloA && got.helloB && Array.isArray(got.helloA.users));
 
   // علی برای رضا پیام می‌فرستد
   wsA.send(JSON.stringify({ t: "msg", to: B.user.id, text: "سلام رضا!", temp: "TMP1" }));

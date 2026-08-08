@@ -546,3 +546,94 @@ body.no-pattern .chat { background-image: none; }
 }
 .empty-contacts b { color: var(--text); }
 
+/* ===== فایل و عکس — شبیه تلگرام ===== */
+.bubble.has-file {
+  padding: 6px;
+}
+.bubble.has-file img, .bubble.has-file video {
+  max-width: 100%;
+  border-radius: 12px;
+}
+.file-bubble {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.18); padding: 10px 12px; border-radius: 12px;
+}
+.file-bubble .file-icon { font-size: 1.8rem; }
+.file-bubble .file-meta { flex:1; min-width:0; }
+.file-bubble .file-name { font-weight:700; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.file-bubble .file-size { font-size:0.75rem; color:var(--dim-2); }
+
+/* ریپلای */
+.bubble .reply-box {
+  border-right: 3px solid var(--accent-2);
+  background: rgba(0,0,0,0.12);
+  padding: 6px 10px; border-radius: 8px; margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+
+/* آنبوردینگ */
+#onboarding-modal .settings-panel {
+  border: 2px solid var(--accent-2);
+  box-shadow: 0 0 0 4px var(--accent-glow), var(--shadow);
+}
+
+/* پروفایل مودال */
+#profile-modal .profile-avatar-big {
+  width: 96px; height: 96px; font-size: 2.2rem;
+}
+
+/* دکمه پیوست */
+#btn-attach {
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+}
+#btn-attach:hover {
+  background: var(--panel-3);
+  color: var(--accent);
+}
+
+/* نوار ریپلای */
+#reply-preview {
+  animation: slideUp 0.15s ease;
+}
+@keyframes slideUp { from { transform: translateY(8px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+/* آپلود پروگرس تلگرامی */
+#upload-progress {
+  border-top: 1px solid var(--border);
+}
+#upload-bar {
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  height: 100%;
+}
+
+/* تلگرام-لایک — سایدبار جدید */
+.sidebar {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.sidebar-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.chat-header {
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+}
+.composer {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+/* پیام واکنش — شبیه تلگرام */
+.bubble:hover .meta {
+  background: rgba(0,0,0,0.18);
+}
+
+/* فونت Vazirmatn برای فارسی */
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap');
+body {
+  font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+}
+
+

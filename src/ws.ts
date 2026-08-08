@@ -93,7 +93,18 @@ export function notifyUser(userId: number, obj: unknown): void {
 }
 
 export function initWs(server: http.Server): void {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    perMessageDeflate: {
+      zlibDeflateOptions: { chunkSize: 1024, memLevel: 7, level: 3 },
+      zlibInflateOptions: { chunkSize: 10 * 1024 },
+      clientNoContextTakeover: true,
+      serverNoContextTakeover: true,
+      threshold: 1024,
+    },
+    maxPayload: 10 * 1024 * 1024,
+  });
 
   wss.on("connection", (ws, req) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -113,17 +124,21 @@ export function initWs(server: http.Server): void {
     }
     set.add(ws);
 
-    const users = listUsers().filter((u) => u.id !== user.id);
+    // برای حریم: فقط مخاطبین و کسانی که باهاش چت داشتی رو بفرست نه همه کاربران
+    const { getRelevantUsers } = require("./db");
+    const relevantUsers = getRelevantUsers ? getRelevantUsers(user.id) : listUsers().filter((u) => u.id !== user.id);
+    const users = relevantUsers;
     const groups = listGroupsForUser(user.id).map(publicGroup);
 
     send(ws, {
       t: "hello",
-      me: publicUser({ ...user, online: true } as User),
+      me: { ...publicUser({ ...user, online: true } as User), bio: (user as any).bio || "", username: user.username },
       users: users.map(publicUser),
       groups,
       unread: unreadCounts(user.id),
       unreadGroups: unreadGroupCounts(user.id),
       last: getLastMessages(user.id),
+      proto: "ws/tcp+deflate", // اطلاع برای کلاینت که ما از TCP با فشرده‌سازی استفاده می‌کنیم
     });
 
     if (firstConn) {
@@ -183,8 +198,12 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
 
   switch (msg?.t) {
     case "msg": {
-      const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 4096) : "";
-      if (!text) return;
+      const textRaw = typeof msg.text === "string" ? msg.text.trim().slice(0, 4096) : "";
+      const fileInfo = msg.file || null; // {url, name, size, mime, type}
+      const replyTo = msg.reply_to ? Number(msg.reply_to) : null;
+      const text = textRaw || (fileInfo ? (fileInfo.name || "فایل") : "");
+
+      if (!text && !fileInfo) return;
 
       // گروه
       if (msg.group) {
@@ -206,7 +225,7 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
         }
         let row;
         try {
-          row = insertGroupMessage(me.id, gid, text);
+          row = insertGroupMessage(me.id, gid, text, fileInfo, replyTo);
         } catch (e) {
           console.error("[ws] insertGroupMessage fail", e);
           send(ws, { t: "error", error: "db_fail" });
@@ -219,12 +238,16 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
           group: gid,
           text: row.text,
           ts: row.ts,
+          msg_type: row.msg_type,
+          file_url: row.file_url,
+          file_name: row.file_name,
+          file_size: row.file_size,
+          mime: row.mime,
+          reply_to: row.reply_to,
         };
-        // به همه اعضای گروه + تأیید به فرستنده
         broadcastGroup(gid, event);
         const ack = { ...event, ack: true, temp: msg.temp ?? null };
         send(ws, ack);
-        // به بقیه دستگاه‌های فرستنده هم ack برود که pending پاک شود
         sendToUser(me.id, ack, ws);
         break;
       }
@@ -239,7 +262,7 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
       }
       let row;
       try {
-        row = insertMessage(me.id, peer.id, text, null);
+        row = insertMessage(me.id, peer.id, text, null, fileInfo, replyTo);
       } catch (e) {
         console.error("[ws] insertMessage failed", e);
         send(ws, { t: "error", error: "db_fail" });
@@ -258,6 +281,12 @@ function handleMessage(me: User, ws: WebSocket, raw: unknown): void {
         text: row.text,
         ts: row.ts,
         read: peer.id === me.id,
+        msg_type: row.msg_type,
+        file_url: row.file_url,
+        file_name: row.file_name,
+        file_size: row.file_size,
+        mime: row.mime,
+        reply_to: row.reply_to,
       };
 
       if (peer.id === me.id) {

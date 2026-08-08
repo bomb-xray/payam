@@ -78,6 +78,13 @@ CREATE TABLE IF NOT EXISTS group_members (
 // مایگریشن‌های سبک برای دیتابیس‌های قدیمی — اضافه کردن ستون‌ها اگر نیستند
 try { db.prepare("ALTER TABLE messages ADD COLUMN group_id INTEGER").run(); } catch {}
 try { db.prepare("ALTER TABLE messages ADD COLUMN reply_to INTEGER").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'text'").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN file_url TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN file_name TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN file_size INTEGER").run(); } catch {}
+try { db.prepare("ALTER TABLE messages ADD COLUMN mime TEXT").run(); } catch {}
+try { db.prepare("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''").run(); } catch {}
+try { db.prepare("ALTER TABLE users ADD COLUMN avatar_url TEXT").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN type TEXT NOT NULL DEFAULT 'group'").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN invite_token TEXT").run(); } catch {}
 try { db.prepare("ALTER TABLE groups ADD COLUMN description TEXT DEFAULT ''").run(); } catch {}
@@ -93,6 +100,7 @@ try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_invite ON groups(inv
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_contacts_owner ON contacts(owner_id)"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_user ON contacts(owner_id, contact_user_id)"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_phone ON contacts(owner_id, phone)"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL"); } catch {}
 
 // ---------------------------------------------------------------------------
 // تایپ‌ها
@@ -103,6 +111,8 @@ export interface User {
   tg_id: number;
   name: string;
   username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
   created_at: number;
   last_seen: number | null;
 }
@@ -116,6 +126,11 @@ export interface MessageRow {
   read_at: number | null;
   group_id: number | null;
   reply_to: number | null;
+  msg_type: string; // text | image | video | file | gif | voice
+  file_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  mime: string | null;
 }
 
 export interface AuthCodeRow {
@@ -202,6 +217,48 @@ export function listUsers(): User[] {
   return db.prepare("SELECT * FROM users ORDER BY name COLLATE NOCASE").all() as User[];
 }
 
+export function getRelevantUsers(meId: number): User[] {
+  // فقط کسانی که:
+  // - مخاطب من هستند
+  // - یا باهاشون چت داشتم
+  // - یا تو گروه مشترک هستیم
+  // - یا ذخیره‌شده‌ها (خودم نیست)
+  // کاربر جدید بدون هیچ ارتباطی به کسی نشون داده نمیشه — حریم خصوصی
+  try {
+    const rows = db
+      .prepare<[number, number, number, number, number, number]>(
+        `SELECT DISTINCT u.* FROM users u
+         WHERE u.id != ?
+           AND (
+             u.id IN (SELECT contact_user_id FROM contacts WHERE owner_id = ? AND contact_user_id IS NOT NULL)
+             OR u.id IN (SELECT sender FROM messages WHERE recipient = ? AND group_id IS NULL)
+             OR u.id IN (SELECT recipient FROM messages WHERE sender = ? AND group_id IS NULL)
+             OR u.id IN (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ? AND gm2.user_id != ?)
+           )
+         ORDER BY u.name COLLATE NOCASE`
+      )
+      .all(meId, meId, meId, meId, meId, meId) as User[];
+    return rows;
+  } catch {
+    // فال‌بک: اگر کوئری پیچیده فیل شد، فقط مخاطبین + کسانی که باهاشون چت داشتی
+    try {
+      const contacts = db.prepare<[number]>("SELECT contact_user_id FROM contacts WHERE owner_id = ? AND contact_user_id IS NOT NULL").all(meId) as Array<{ contact_user_id: number }>;
+      const ids = new Set<number>();
+      contacts.forEach((c) => ids.add(c.contact_user_id));
+      const msgs = db.prepare<[number, number]>("SELECT sender, recipient FROM messages WHERE (sender = ? OR recipient = ?) AND group_id IS NULL").all(meId, meId) as Array<{ sender: number; recipient: number }>;
+      msgs.forEach((m) => {
+        if (m.sender !== meId) ids.add(m.sender);
+        if (m.recipient !== meId) ids.add(m.recipient);
+      });
+      if (ids.size === 0) return [];
+      const placeholders = [...ids].map(() => "?").join(",");
+      return db.prepare(`SELECT * FROM users WHERE id IN (${placeholders}) ORDER BY name COLLATE NOCASE`).all(...[...ids]) as User[];
+    } catch {
+      return [];
+    }
+  }
+}
+
 export function touchLastSeen(userId: number): void {
   db.prepare("UPDATE users SET last_seen = ? WHERE id = ?").run(now(), userId);
 }
@@ -267,18 +324,41 @@ export function cleanupAuthCodes(): void {
 // پیام‌ها (شخصی + گروهی)
 // ---------------------------------------------------------------------------
 
+export interface FileInfo {
+  url: string;
+  name: string;
+  size: number;
+  mime: string;
+  type: string; // image | video | file | gif | voice etc
+}
+
 export function insertMessage(
   sender: number,
   recipient: number,
   text: string,
-  groupId: number | null = null
+  groupId: number | null = null,
+  file?: FileInfo | null,
+  replyTo: number | null = null
 ): MessageRow {
   const ts = now();
   const info = db
     .prepare(
-      "INSERT INTO messages (sender, recipient, text, ts, group_id) VALUES (?, ?, ?, ?, ?)"
+      `INSERT INTO messages (sender, recipient, text, ts, group_id, reply_to, msg_type, file_url, file_name, file_size, mime)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(sender, recipient, text, ts, groupId);
+    .run(
+      sender,
+      recipient,
+      text,
+      ts,
+      groupId,
+      replyTo,
+      file?.type || "text",
+      file?.url || null,
+      file?.name || null,
+      file?.size || null,
+      file?.mime || null
+    );
   return {
     id: Number(info.lastInsertRowid),
     sender,
@@ -287,22 +367,41 @@ export function insertMessage(
     ts,
     read_at: null,
     group_id: groupId,
-    reply_to: null,
+    reply_to: replyTo,
+    msg_type: file?.type || "text",
+    file_url: file?.url || null,
+    file_name: file?.name || null,
+    file_size: file?.size || null,
+    mime: file?.mime || null,
   };
 }
 
 export function insertGroupMessage(
   sender: number,
   groupId: number,
-  text: string
+  text: string,
+  file?: FileInfo | null,
+  replyTo: number | null = null
 ): MessageRow {
   const ts = now();
-  // برای گروه، recipient را برابر sender می‌گذاریم تا FK رد نشود ولی group_id اصلی است
   const info = db
     .prepare(
-      "INSERT INTO messages (sender, recipient, text, ts, group_id) VALUES (?, ?, ?, ?, ?)"
+      `INSERT INTO messages (sender, recipient, text, ts, group_id, reply_to, msg_type, file_url, file_name, file_size, mime)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(sender, sender, text, ts, groupId);
+    .run(
+      sender,
+      sender,
+      text,
+      ts,
+      groupId,
+      replyTo,
+      file?.type || "text",
+      file?.url || null,
+      file?.name || null,
+      file?.size || null,
+      file?.mime || null
+    );
   return {
     id: Number(info.lastInsertRowid),
     sender,
@@ -311,7 +410,12 @@ export function insertGroupMessage(
     ts,
     read_at: null,
     group_id: groupId,
-    reply_to: null,
+    reply_to: replyTo,
+    msg_type: file?.type || "text",
+    file_url: file?.url || null,
+    file_name: file?.name || null,
+    file_size: file?.size || null,
+    mime: file?.mime || null,
   };
 }
 
@@ -530,9 +634,18 @@ export function getGroupMembers(groupId: number): Array<{ user: User; role: stri
        FROM group_members gm JOIN users u ON u.id = gm.user_id
        WHERE gm.group_id = ? ORDER BY gm.joined_at ASC`
     )
-    .all(groupId) as Array<User & { role: string; joined_at: number }>;
+    .all(groupId) as Array<User & { role: string; joined_at: number; bio: string | null; avatar_url: string | null }>;
   return rows.map((r) => ({
-    user: { id: r.id, tg_id: r.tg_id, name: r.name, username: r.username, created_at: r.created_at, last_seen: r.last_seen } as User,
+    user: {
+      id: r.id,
+      tg_id: r.tg_id,
+      name: r.name,
+      username: r.username,
+      bio: (r as any).bio || "",
+      avatar_url: (r as any).avatar_url || null,
+      created_at: r.created_at,
+      last_seen: r.last_seen,
+    } as User,
     role: r.role,
     joined_at: r.joined_at,
   }));
@@ -582,6 +695,44 @@ export function updateUserName(id: number, name: string): User | undefined {
   if (trimmed.length < 1) return undefined;
   db.prepare("UPDATE users SET name = ? WHERE id = ?").run(trimmed, id);
   return getUserById(id);
+}
+
+export function updateUserProfile(
+  id: number,
+  fields: { name?: string; username?: string | null; bio?: string }
+): User | undefined {
+  const existing = getUserById(id);
+  if (!existing) return undefined;
+
+  if (fields.name !== undefined) {
+    const trimmed = fields.name.trim().replace(/\s+/g, " ").slice(0, 64);
+    if (trimmed.length >= 2) db.prepare("UPDATE users SET name = ? WHERE id = ?").run(trimmed, id);
+  }
+  if (fields.username !== undefined) {
+    let uname = fields.username ? String(fields.username).trim().replace(/^@/, "").slice(0, 32) : null;
+    if (uname === "") uname = null;
+    if (uname) {
+      // یکتا بودن — به جز خودم
+      if (!/^[a-zA-Z0-9_]{3,32}$/.test(uname)) throw new Error("username_bad_format");
+      const other = db.prepare<[string, number]>("SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?").get(uname, id) as any;
+      if (other) throw new Error("username_taken");
+    }
+    db.prepare("UPDATE users SET username = ? WHERE id = ?").run(uname, id);
+  }
+  if (fields.bio !== undefined) {
+    const bio = String(fields.bio).slice(0, 512);
+    db.prepare("UPDATE users SET bio = ? WHERE id = ?").run(bio, id);
+  }
+  return getUserById(id);
+}
+
+export function isUsernameTaken(username: string, exceptId?: number): boolean {
+  const row = db
+    .prepare<[string]>("SELECT id FROM users WHERE LOWER(username) = LOWER(?)")
+    .get(username) as any;
+  if (!row) return false;
+  if (exceptId && row.id === exceptId) return false;
+  return true;
 }
 
 export function listSessionsByUser(userId: number): Array<{ token_hash: string; created_at: number }> {
