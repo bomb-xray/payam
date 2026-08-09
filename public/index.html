@@ -86,7 +86,7 @@
   <div id="app" class="app hidden">
     <aside class="sidebar">
       <header class="sidebar-header">
-        <h2 dir="ltr" style="display:flex; align-items:center; gap:8px">🌊 Furina mind <span style="font-size:0.65rem; background:var(--panel-2); padding:2px 6px; border-radius:8px; border:1px solid var(--border-2)" id="proto-badge" title="پروتکل اتصال">TCP+WS</span></h2>
+        <h2 dir="ltr" style="display:flex; align-items:center; gap:8px">🌊 Furina mind</h2>
         <div style="display:flex; gap:6px; align-items:center">
           <span id="conn-state" class="conn" title="وضعیت اتصال"></span>
           <button id="btn-new" class="icon-btn" title="ساخت گروه/کانال/مخاطب" style="font-size:1rem">➕</button>
@@ -130,15 +130,10 @@
       <div id="empty-state" class="empty-state">
         <div class="empty-icon">🌊</div>
         <p>به Furina mind — شبیه تلگرام — خوش اومدی</p>
-        <p class="dim">گروه، کانال، مخاطب، عکس، ویدیو، گیف، فایل — همه ابری</p>
+        <p class="dim">گروه، کانال، مخاطب، عکس، ویدیو، گیف، فایل — همه ابری و فوری</p>
         <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center">
           <kbd>Enter</kbd> ارسال
           <kbd>Shift+Enter</kbd> خط جدید
-          <span class="dim">/</span>
-          <span class="link-chip">TCP+WS با فشرده‌سازی — سریع و مطمئن</span>
-        </div>
-        <div class="dim" style="margin-top:12px; font-size:0.78rem; max-width:360px; line-height:1.8; background:var(--panel); padding:10px 12px; border-radius:12px; border:1px solid var(--border-2)">
-          چرا TCP و نه UDP؟ TCP مطمئنه — پیام گم نمیشه، ترتیب حفظ میشه. UDP سریعه ولی ممکنه پیام‌ها گم یا جابجا بشن. ما WS روی TCP با `permessage-deflate` فشرده می‌کنیم تا هم سریع باشه هم مطمئن — دقیقاً مثل تلگرام.
         </div>
       </div>
 
@@ -227,7 +222,7 @@
           <button data-tab="chats" class="settings-nav-item">💬 چت</button>
           <button data-tab="notifications" class="settings-nav-item">🔔 اعلان</button>
           <button data-tab="privacy" class="settings-nav-item">🔒 حریم</button>
-          <button data-tab="data" class="settings-nav-item">🗄️ داده/پروتکل</button>
+          <button data-tab="data" class="settings-nav-item">🗄️ داده</button>
           <button data-tab="about" class="settings-nav-item">ℹ️ درباره</button>
         </nav>
         <div class="settings-content">
@@ -251,7 +246,7 @@
           <div class="settings-tab" data-tab-content="chats"><div class="settings-section"><h4>⌨️ ارسال</h4><div class="settings-card"><div class="settings-row"><div class="row-main"><div class="row-title">Enter برای ارسال</div></div><div class="toggle on" id="toggle-enter" data-key="enterToSend"></div></div><div class="settings-row"><div class="row-main"><div class="row-title">اسکرول خودکار</div></div><div class="toggle on" id="toggle-autoscroll" data-key="autoScroll"></div></div></div></div></div>
           <div class="settings-tab" data-tab-content="notifications"><div class="settings-section"><h4>🔔 صدا</h4><div class="settings-card"><div class="settings-row"><div class="row-main"><div class="row-title">صدای پیام</div></div><div class="toggle on" id="toggle-sound" data-key="sound"></div></div><div class="settings-row"><div class="row-main"><div class="row-title">اعلان دسکتاپ</div></div><div style="display:flex; gap:8px; align-items:center"><button class="btn btn-ghost" id="btn-req-notif">فعال‌سازی</button><div class="toggle" id="toggle-desktop" data-key="desktopNotif"></div></div></div></div></div></div>
           <div class="settings-tab" data-tab-content="privacy"><div class="settings-section"><h4>🔒 حریم خصوصی</h4><div class="settings-card"><div class="settings-row"><div class="row-main"><div class="row-title">نمایش آنلاین</div><div class="row-desc">فقط مخاطبین و هم‌گروهی‌ها تو رو می‌بینن</div></div><div class="toggle on" id="toggle-online" data-key="showOnline"></div></div><div class="settings-row"><div class="row-main"><div class="row-title">لیست کاربران عمومی نیست</div><div class="row-desc">کاربر جدید به همه نشون داده نمیشه — فقط بعد از مخاطب یا گروه مشترک</div></div><div class="toggle on" style="opacity:0.6; pointer-events:none"></div></div></div><div class="settings-section"><h4>📱 نشست‌ها</h4><div class="settings-card"><div class="sessions-list" id="sessions-list">...</div><div style="margin-top:12px"><button class="btn btn-danger" id="btn-revoke-others">خروج از باقی</button><span id="sessions-status" class="dim"></span></div></div></div></div>
-          <div class="settings-tab" data-tab-content="data"><div class="settings-section"><h4>💾 داده و پروتکل</h4><div class="settings-card"><div class="settings-row"><div class="row-main"><div class="row-title">پروتکل</div><div class="row-desc" id="proto-desc">WebSocket روی TCP با per-message deflate — مطمئن + سریع + فشرده. UDP برای پیام‌رسان مناسب نیست چون پیام گم میشه.</div></div><div class="settings-row"><div class="row-main"><div class="row-title">فشرده‌سازی</div><div class="row-desc">فعال — پیام‌ها تا 70% کمتر حجم می‌گیرن</div></div><div class="toggle on" style="opacity:0.6; pointer-events:none"></div></div><div class="settings-row"><div class="row-main"><div class="row-title">کش</div><div class="row-desc" id="storage-text">...</div></div></div><div class="storage-bar"><div class="storage-fill" id="storage-fill"></div></div><div style="display:flex; gap:8px; margin-top:12px"><button class="btn btn-ghost" id="btn-export">📤 خروجی ابری</button><button class="btn btn-danger" id="btn-clear-all">🗑️ پاک کردن محلی</button></div></div></div></div>
+          <div class="settings-tab" data-tab-content="data"><div class="settings-section"><h4>💾 داده</h4><div class="settings-card"><div class="settings-row"><div class="row-main"><div class="row-title">اتصال</div><div class="row-desc" id="proto-desc">Realtime فشرده — سریع و مطمئن، پیام‌ها کم‌حجم میشن (per-message deflate فعال)</div></div><div class="settings-row"><div class="row-main"><div class="row-title">فشرده‌سازی</div><div class="row-desc">فعال — ترافیک کمتر، سرعت بیشتر</div></div><div class="toggle on" style="opacity:0.6; pointer-events:none"></div></div><div class="settings-row"><div class="row-main"><div class="row-title">کش</div><div class="row-desc" id="storage-text">...</div></div></div><div class="storage-bar"><div class="storage-fill" id="storage-fill"></div></div><div style="display:flex; gap:8px; margin-top:12px"><button class="btn btn-ghost" id="btn-export">📤 خروجی ابری</button><button class="btn btn-danger" id="btn-clear-all">🗑️ پاک کردن محلی</button></div></div></div></div>
           <div class="settings-tab" data-tab-content="about"><div class="about-hero"><div class="about-logo">🌊</div><div class="about-title" dir="ltr">Furina mind v0.4 — Telegram-like</div><div class="about-ver">گروه، کانال، مخاطبین، فایل، پروفایل، یوزرنیم، بیو — شبیه تلگرام</div><div class="about-links"><a class="link-chip" href="https://github.com/bomb-xray/payam" target="_blank">GitHub</a><span class="link-chip" id="about-bot">🤖 بات: …</span></div></div></div>
         </div>
       </div>
