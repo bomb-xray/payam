@@ -636,4 +636,177 @@ body {
   font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
 }
 
+/* ===== موبایل — مطابقت پذیر کامل (Mobile First) ===== */
+@media (max-width: 760px) {
+  html, body {
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .login {
+    height: 100dvh;
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: 6vh;
+  }
+  .login-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+  .app {
+    height: 100dvh;
+    height: 100vh;
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    height: 100dvh;
+  }
+  .sidebar-header {
+    padding: 12px 14px 8px;
+  }
+  .sidebar-tabs {
+    margin: 0 8px 6px;
+    padding: 4px 6px;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sidebar-tabs::-webkit-scrollbar { display: none; }
+  .sidebar-tab {
+    flex: 0 0 auto;
+    min-width: 64px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  .search-wrap {
+    padding: 0 10px 8px;
+  }
+  .search-wrap input {
+    padding: 12px 14px;
+    font-size: 0.95rem;
+  }
+  .user-list {
+    padding: 2px 0 80px;
+  }
+  .user-item, .group-item, .contact-item {
+    margin: 1px 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .avatar, .group-avatar {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+  .chat {
+    display: none;
+    height: 100dvh;
+  }
+  .app.chat-open .sidebar { display: none; }
+  .app.chat-open .chat { display: flex; }
+  .chat-header {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .chat-header .avatar {
+    width: 36px; height: 36px; min-width: 36px;
+  }
+  .peer-name { font-size: 0.92rem; }
+  .peer-meta { max-width: 48vw; }
+  .messages {
+    padding: 12px 10px;
+    gap: 6px;
+  }
+  .bubble {
+    max-width: 88%;
+    padding: 8px 12px 6px;
+    font-size: 0.9rem;
+    border-radius: 16px;
+  }
+  .bubble.has-file img, .bubble.has-file video {
+    max-width: 100%;
+    max-height: 60vh;
+  }
+  .composer {
+    padding: 8px 10px;
+    gap: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: var(--panel);
+  }
+  .composer .input-wrap {
+    padding: 3px 4px 3px 12px;
+    border-radius: 24px;
+  }
+  .composer textarea {
+    font-size: 0.92rem;
+    max-height: 30vh;
+  }
+  .send-btn {
+    width: 44px; height: 44px; min-width: 44px;
+  }
+  #btn-attach {
+    width: 40px; height: 40px; min-width: 40px;
+  }
+  .back-btn { display: inline-flex !important; }
+  .settings-modal {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .settings-panel {
+    max-width: 100%;
+    width: 100%;
+    height: 100dvh;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+  .settings-header {
+    padding: 14px 16px;
+  }
+  .settings-content {
+    padding: 14px 12px;
+  }
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  .theme-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .profile-head {
+    flex-direction: column;
+    text-align: center;
+  }
+  .field input {
+    font-size: 16px; /* جلوگیری از زوم خودکار iOS */
+  }
+  /* فوتر موبایل امن */
+  .sidebar-footer {
+    padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+    background: var(--panel);
+  }
+}
+
+@media (max-width: 380px) {
+  .sidebar-tab {
+    min-width: 54px;
+    font-size: 0.68rem;
+    padding: 6px 8px;
+  }
+  .login-card { padding: 20px 14px; }
+}
+
+/* تاچ بهتر */
+button, .user-item, .group-item, .contact-item, .icon-btn, .sidebar-tab {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+
 
