@@ -649,8 +649,8 @@ function buildBubble(m){
   return el;
 }
 
-let replyToId=null;
-function setReply(m){
+let replyToId:number|null=null;
+function setReply(m:any){
   replyToId=m.id;
   const box=$("reply-preview"); if(!box) return;
   box.classList.remove("hidden");
@@ -668,16 +668,16 @@ function onAck(msg){
   if(el){
     state.pending.delete(msg.temp);
     const idx=state.msgs.findIndex(x=>x.id===-1 && (x.text===msg.text || msg.file) && (x.recipient===msg.to || x.group_id===msg.group));
-    const m={ id:msg.id, sender:state.me.id, recipient:msg.to||state.me.id, text:msg.text, ts:msg.ts, group_id:msg.group||null, read_at: isSavedId(msg.to)||msg.group?Date.now():null,
+    const m:any={ id:msg.id, sender:state.me.id, recipient:msg.to||state.me.id, text:msg.text, ts:msg.ts, group_id:msg.group||null, read_at: isSavedId(msg.to)||msg.group?Date.now():null,
       msg_type:msg.file?.type||msg.msg_type||"text", file_url:msg.file?.url||msg.file_url||null, file_name:msg.file?.name||msg.file_name||null, file_size:msg.file?.size||msg.file_size||null, mime:msg.file?.mime||msg.mime||null, reply_to:msg.reply_to||null };
     if(idx!==-1) state.msgs[idx]=m; else state.msgs.push(m);
     const fresh=buildBubble(m); el.replaceWith(fresh);
   }else{
     if(state.msgs.some(x=>x.id===msg.id)) return;
     if(msg.group && state.group===msg.group){
-      const mm={ id:msg.id, sender:state.me.id, text:msg.text, ts:msg.ts, group_id:msg.group, msg_type:msg.file?.type||msg.msg_type, file_url:msg.file?.url||msg.file_url, file_name:msg.file?.name||msg.file_name }; state.msgs.push(mm); appendBubble(mm); scrollDown();
+      const mm:any={ id:msg.id, sender:state.me.id, text:msg.text, ts:msg.ts, group_id:msg.group, msg_type:msg.file?.type||msg.msg_type, file_url:msg.file?.url||msg.file_url, file_name:msg.file?.name||msg.file_name }; state.msgs.push(mm); appendBubble(mm); scrollDown();
     }else if(msg.to===state.peer || (msg.group&&state.group===msg.group) || state.msgs.some(x=>x.recipient===msg.to)){
-      const mm={ id:msg.id, sender:state.me.id, recipient:msg.to, text:msg.text, ts:msg.ts, group_id:msg.group||null, msg_type:msg.file?.type||msg.msg_type, file_url:msg.file?.url||msg.file_url, file_name:msg.file?.name||msg.file_name }; state.msgs.push(mm); if(msg.to===state.peer||msg.group===state.group){ appendBubble(mm); scrollDown(); }
+      const mm:any={ id:msg.id, sender:state.me.id, recipient:msg.to, text:msg.text, ts:msg.ts, group_id:msg.group||null, msg_type:msg.file?.type||msg.msg_type, file_url:msg.file?.url||msg.file_url, file_name:msg.file?.name||msg.file_name }; state.msgs.push(mm); if(msg.to===state.peer||msg.group===state.group){ appendBubble(mm); scrollDown(); }
     }
   }
   if(msg.group) state.lastGroupMsg.set(msg.group,{text:msg.file?`[${msg.file.type}] ${msg.text}`:msg.text, ts:msg.ts, from:state.me.id, out:true});
@@ -696,21 +696,21 @@ async function sendMessage(){
   }
   input.value=""; input.style.height="auto";
   const temp="t"+Date.now()+Math.random().toString(36).slice(2,7);
-  const optimistic={ id:-1, sender:state.me.id, recipient:state.peer||state.me.id, text:text||"", ts:Date.now(), group_id:state.group||null, read_at:null, reply_to:replyToId };
+  const optimistic:any={ id:-1, sender:state.me.id, recipient:state.peer||state.me.id, text:text||"", ts:Date.now(), group_id:state.group||null, read_at:null, reply_to:replyToId };
   state.msgs.push(optimistic);
   const el=buildBubble(optimistic); el.classList.add("pending"); $("messages").appendChild(el); state.pending.set(temp,el);
   scrollDown(true);
   if(state.group) state.lastGroupMsg.set(state.group,{text:text||"پیام", ts:optimistic.ts, from:state.me.id, out:true});
   else state.lastMsg.set(state.peer,{text:text||"پیام", ts:optimistic.ts, out:true});
   renderSidebar();
-  const payload={ text, temp, reply_to:replyToId };
+  const payload:any={ text, temp, reply_to:replyToId };
   if(state.group) payload.group=state.group; else payload.to=state.peer;
   const rt=replyToId; clearReply();
   let acked=false;
   wsSend({ t:"msg", to:payload.to, group:payload.group, text:payload.text, temp, reply_to:rt });
   setTimeout(()=>{
     if(state.pending.has(temp) && !acked){
-      const p2= state.group? {group:state.group, text:payload.text, reply_to:rt} : {to:state.peer, text:payload.text, reply_to:rt};
+      const p2:any= state.group? {group:state.group, text:payload.text, reply_to:rt} : {to:state.peer, text:payload.text, reply_to:rt};
       api("/messages",{method:"POST", body:JSON.stringify(p2)}).then(r=>{
         if(!state.pending.has(temp)) return;
         onAck({id:r.message.id, to:state.peer, group:state.group, text:r.message.text, ts:r.message.ts, temp, reply_to:rt}); acked=true;
@@ -879,7 +879,7 @@ function openOnboarding(){
   m.classList.remove("hidden");
   $("ob-name").value=state.me.name||"";
   $("ob-username").value=state.me.username||"";
-  $("ob-bio").value=(state.me).bio||"";
+  $("ob-bio").value=(state.me as any).bio||"";
   $("ob-id").value=String(state.me.id);
 }
 function closeOnboarding(){ $("onboarding-modal")?.classList.add("hidden"); }
@@ -906,7 +906,7 @@ $("btn-ob-save")?.addEventListener("click", async()=>{
     closeOnboarding();
     toast("✅ پروفایل ساخته شد — حالا فقط مخاطبین و هم‌گروهی‌ها تو رو می‌بینن");
     renderSidebar();
-  }catch(e){
+  }catch(e:any){
     if(e.code==="username_taken") st.textContent="این یوزرنیم گرفته شده";
     else if(e.code==="username_bad_format") st.textContent="فرمت یوزرنیم اشتباهه";
     else st.textContent="خطا: "+e.message;
@@ -916,8 +916,8 @@ $("btn-ob-save")?.addEventListener("click", async()=>{
 // ---------------------------------------------------------------------------
 // پروفایل بقیه — باز کردن با کلیک روی آواتار
 // ---------------------------------------------------------------------------
-let profileViewId=null;
-function openProfile(userId){
+let profileViewId:number|null=null;
+function openProfile(userId:number){
   const u=state.users.get(userId) || (state.me.id===userId? state.me : null);
   if(!u && userId!==state.me.id){
     // از سرور بگیر
@@ -925,9 +925,9 @@ function openProfile(userId){
     return;
   }
   const target = u || state.me;
-  showProfileModal(target);
+  showProfileModal(target as any);
 }
-function showProfileModal(u){
+function showProfileModal(u:any){
   profileViewId=u.id;
   const m=$("profile-modal"); m.classList.remove("hidden");
   const av=$("pv-avatar"); setAvatar(av,u); av.textContent=(u.name||"?").trim().charAt(0)||"?";
@@ -944,9 +944,9 @@ $("btn-pv-chat")?.addEventListener("click", ()=>{ if(!profileViewId) return; clo
 $("btn-pv-add-contact")?.addEventListener("click", async()=>{
   if(!profileViewId) return;
   try{
-    const r=await api("/contacts",{method:"POST", body:JSON.stringify({tg_id: (state.users.get(profileViewId)?.tg_id) || undefined, username: state.users.get(profileViewId)?.username})});
+    const r=await api("/contacts",{method:"POST", body:JSON.stringify({tg_id: (state.users.get(profileViewId)?.tg_id) || undefined, username: state.users.get(profileViewId!)?.username})});
     toast("افزوده شد به مخاطبین");
-  }catch(e){ toast(e.message); }
+  }catch(e:any){ toast(e.message); }
 });
 $("me-area")?.addEventListener("click", ()=> openProfile(state.me.id));
 $("peer-avatar")?.addEventListener("click", ()=>{ if(state.peer) openProfile(state.peer); else if(state.group){ /* گروه */ } });
@@ -955,7 +955,7 @@ $("peer-meta-area")?.addEventListener("click", ()=>{ if(state.peer) openProfile(
 // ---------------------------------------------------------------------------
 // آپلود فایل — عکس، ویدیو، گیف، هر فایلی
 // ---------------------------------------------------------------------------
-const fileInput=$("file-input");
+const fileInput=$("file-input") as HTMLInputElement;
 $("btn-attach")?.addEventListener("click", ()=> fileInput?.click());
 fileInput?.addEventListener("change", async()=>{
   const files=fileInput.files; if(!files||files.length===0) return;
@@ -965,7 +965,7 @@ fileInput?.addEventListener("change", async()=>{
   fileInput.value="";
 });
 
-async function uploadAndSend(file){
+async function uploadAndSend(file:File){
   const bar=$("upload-progress"); const fill=$("upload-bar"); const txt=$("upload-text");
   if(bar) bar.classList.remove("hidden");
   if(fill) fill.style.width="10%";
@@ -974,7 +974,7 @@ async function uploadAndSend(file){
   try{
     const fd=new FormData();
     fd.append("file", file);
-    const h={}; if(state.token) h.Authorization="Bearer "+state.token;
+    const h:any={}; if(state.token) h.Authorization="Bearer "+state.token;
     const res=await fetch("/api/upload", {method:"POST", headers:h, body:fd});
     const data=await res.json();
     if(!res.ok) throw new Error(data.message||data.error||"خطای آپلود");
@@ -985,14 +985,14 @@ async function uploadAndSend(file){
     $("input").value="";
     // شبیه sendMessage ولی با فایل
     const temp="t"+Date.now()+Math.random().toString(36).slice(2,5);
-    const optimistic={ id:-1, sender:state.me.id, recipient:state.peer||state.me.id, text, ts:Date.now(), group_id:state.group||null, file_url:fileInfo.url, file_name:fileInfo.name, file_size:fileInfo.size, mime:fileInfo.mime, msg_type:fileInfo.type, read_at:null };
+    const optimistic:any={ id:-1, sender:state.me.id, recipient:state.peer||state.me.id, text, ts:Date.now(), group_id:state.group||null, file_url:fileInfo.url, file_name:fileInfo.name, file_size:fileInfo.size, mime:fileInfo.mime, msg_type:fileInfo.type, read_at:null };
     state.msgs.push(optimistic);
     const el=buildBubble(optimistic); el.classList.add("pending"); $("messages").appendChild(el); state.pending.set(temp,el); scrollDown(true);
     wsSend({ t:"msg", to:state.peer, group:state.group, text, temp, file:fileInfo });
     // فال‌بک HTTP
     setTimeout(()=>{
       if(state.pending.has(temp)){
-        const payload= state.group? {group:state.group, text, file:fileInfo} : {to:state.peer, text, file:fileInfo};
+        const payload:any= state.group? {group:state.group, text, file:fileInfo} : {to:state.peer, text, file:fileInfo};
         api("/messages",{method:"POST", body:JSON.stringify(payload)}).then(r=>{
           if(!state.pending.has(temp)) return;
           onAck({id:r.message.id, to:state.peer, group:state.group, text:r.message.text, ts:r.message.ts, temp, file:fileInfo});
@@ -1002,7 +1002,7 @@ async function uploadAndSend(file){
 
     if(fill) fill.style.width="100%";
     setTimeout(()=>{ if(bar) bar.classList.add("hidden"); if(fill) fill.style.width="0%"; }, 800);
-  }catch(e){
+  }catch(e:any){
     toast("خطای آپلود: "+e.message);
     const bar=$("upload-progress"); if(bar) bar.classList.add("hidden");
   }
@@ -1027,9 +1027,9 @@ if(chatViewEl){
   if(state.token){
     api("/me").then(r=>{
       state.me=r.user;
-      if(r.user.needs_onboarding || !r.user.username || !(r.user).bio){
+      if(r.user.needs_onboarding || !r.user.username || !(r.user as any).bio){
         // کمی صبر تا enterApp تموم شه
-        setTimeout(()=>{ enterApp().then(()=>{ if((r.user).needs_onboarding || !state.me.username) openOnboarding(); }); }, 300);
+        setTimeout(()=>{ enterApp().then(()=>{ if((r.user as any).needs_onboarding || !state.me.username) openOnboarding(); }); }, 300);
       }else{
         enterApp();
       }
