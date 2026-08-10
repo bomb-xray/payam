@@ -205,7 +205,24 @@ function finishLogin(t){ stopLoginFlow(); state.token=t; localStorage.setItem("p
 // ---------------------------------------------------------------------------
 async function enterApp(){
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-  try{ const me=await api("/me"); state.me=me.user; }catch{ localStorage.removeItem("payam_token"); state.token=null; showLogin(); return; }
+  try{
+    const me=await api("/me");
+    state.me=me.user;
+  }catch(e){
+    // فقط اگر واقعاً توکن بی‌اعتبار باشه لاگ‌اوت کن، نه وقتی آفلاین یا سرور خوابه
+    if(e.code==="unauthorized" || e.message.includes("401")){
+      localStorage.removeItem("payam_token");
+      state.token=null;
+      showLogin();
+    }else{
+      // نت قطعه یا سرور خوابه — با همون توکن بمون و دوباره تلاش کن
+      console.warn("enterApp /me failed, keeping token", e);
+      // سعی کن با کش محلی ادامه بدی یا بعداً رفرش کنی
+      setTimeout(()=>{ if(state.token) enterApp(); }, 3000);
+      toast("اتصال به سرور برقرار نیست — تلاش مجدد...");
+    }
+    return;
+  }
   $("me-name").textContent=state.me.name; $("me-username").textContent=state.me.username?"@"+state.me.username:""; setAvatar($("me-avatar"),state.me);
   try{ const r=await api("/users"); state.users.clear(); for(const u of r.users) state.users.set(u.id,u); }catch{}
   try{ const r=await api("/groups"); state.groups.clear(); for(const g of r.groups) state.groups.set(g.id,g); }catch{}
@@ -1020,20 +1037,38 @@ if(chatViewEl){
   });
 }
 
-// شروع
+// شروع — با حریم خصوصی و بدون لاگ‌اوت علکی وقتی کروم بسته میشه
 (function boot(){
   applySettings(); initSettingsUI();
-  // چک کن اگر قبلاً لاگین کرده ولی نیاز به آنبوردینگ داره
   if(state.token){
     api("/me").then(r=>{
       state.me=r.user;
-      if(r.user.needs_onboarding || !r.user.username || !(r.user).bio){
-        // کمی صبر تا enterApp تموم شه
-        setTimeout(()=>{ enterApp().then(()=>{ if((r.user).needs_onboarding || !state.me.username) openOnboarding(); }); }, 300);
+      if(r.user.needs_onboarding || !r.user.username || !r.user.bio){
+        setTimeout(()=>{ enterApp().then(()=>{ if(r.user.needs_onboarding || !state.me.username) openOnboarding(); }); }, 300);
       }else{
         enterApp();
       }
-    }).catch(()=>{ localStorage.removeItem("payam_token"); state.token=null; showLogin(); });
+    }).catch(e=>{
+      // فقط اگر توکن واقعاً بی‌اعتباره لاگ‌اوت کن
+      if(e.code==="unauthorized"){
+        localStorage.removeItem("payam_token");
+        state.token=null;
+        showLogin();
+      }else{
+        // نت قطعه یا سرور خواب — لاگین رو نشون نده، با همون توکن بمون و دوباره تلاش کن
+        console.warn("boot /me failed, keeping token", e);
+        // سعی کن مستقیم بری تو اپ با کش، یا لاگین رو نشون بده ولی توکن رو نگه دار
+        const cachedMe = state.me;
+        if(cachedMe){
+          enterApp();
+        }else{
+          // اگه تا 3 ثانیه دیگه هم نت نیومد، لاگین رو نشون بده ولی توکن پاک نکن
+          setTimeout(()=>{
+            api("/me").then(rr=>{ state.me=rr.user; enterApp(); }).catch(()=>{ showLogin(); });
+          }, 2000);
+        }
+      }
+    });
     return;
   }
   showLogin();
