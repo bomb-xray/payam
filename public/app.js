@@ -1033,9 +1033,138 @@ if(chatViewEl){
   chatViewEl.addEventListener("drop", async e=>{
     e.preventDefault(); chatViewEl.style.background="";
     const files=e.dataTransfer?.files; if(!files) return;
-    for(const f of Array.from(files)) await uploadAndSend(f);
+    for(const f of Array.from(files)){
+      if(f.type.startsWith("image/") && e.dataTransfer.files.length===1){
+        showPhotoPreview(f);
+      } else {
+        await uploadAndSend(f);
+      }
+    }
   });
 }
+
+// ---------------------------------------------------------------------------
+// ایموجی پنل — تلگرامی، با دسته‌بندی و اخیر
+// ---------------------------------------------------------------------------
+const EMOJIS = {
+  recent: [],
+  smile: ["😀","😃","😄","😁","😆","😅","😂","🤣","🥲","🥹","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚","😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🥸","🤩","🥳","😏","😒","😞","😔","😟","😕","🙁","☹️","😣","😖","😫","😩","🥺","😢","😭","😮‍💨","😤","😠","😡","🤬","🤯","😳","🥵","🥶","😱","😨","😰","😥","😓","🤗","🤔","🫣","🤭","🫢","🫡","🤫","🫠","🤥","😶","🫥","😐","🫤","😑","🫨","😬","🙄","😯","😦","😧","😮","😲","🥱","😴","🤤","😪","😵","🤐","🥴","😵‍💫"],
+  gesture: ["👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🫰","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️","👍","👎","👊","✊","🤛","🤜","👏","🙌","🫶","👐","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿","🦵","🦶","👂","🦻","👃","🧠","🫀","🫁","🦷","🦴","👀","👁️","👅","👄"],
+  animal: ["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🐦","🐤","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🦟","🦗","🕷️","🦂","🐢","🐍","🦎","🐙","🦑","🦐","🦞","🦀","🐡","🐠","🐟","🐳","🐋","🦈","🐊","🐅","🐆","🦓","🦍","🐘","🦛","🦏","🐪","🐫","🦒","🦘","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐","🦌","🐕","🐩","🐈","🐓","🦃","🦚","🦜","🦢","🐇","🦝","🦨","🦡","🦫","🦦","🐁","🐀","🐿️","🦔"],
+  food: ["🍏","🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🫐","🍈","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥒","🌶️","🌽","🥕","🥐","🍞","🥨","🧀","🥚","🍳","🥞","🥓","🍗","🍖","🌭","🍔","🍟","🍕","🥪","🌮","🥗","🍝","🍜","🍣","🍱","🍙","🍚","🍘","🍥","🥠","🍢","🍡","🍧","🍨","🍦","🥧","🍰","🎂","🍭","🍬","🍫","🍿","🍩","🍪","🌰","🥜","🍯","🍼","☕","🍵","🥤","🍺","🍷","🍸","🍾"],
+  travel: ["🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐","🚚","🚜","🛴","🚲","🛵","🏍️","🚨","🚔","🚍","🚠","🚃","🚋","🚞","🚄","🚅","🚂","🚇","✈️","🛫","🛬","🛩️","🚀","🚁","⛵","🚤","🛳️","⚓","⛽","🚧","🚦","🗺️","🗽","🗼","🏰","🏯","🏟️","🎡","🎢","🎠","⛲","🏖️","🏝️","🌋","⛰️","🏔️","🏕️","🏠","🏢","🏥","🏦","🏨","🏪","🏫","⛪","🕌","🛤️","🌅","🌄","🌠","🎆","🌇","🌆","🏙️","🌃","🌌","🌉"],
+  object: ["⌚","📱","💻","⌨️","🖥️","🖨️","🖱️","💽","💾","💿","📀","📼","📷","📸","📹","🎥","📞","☎️","📺","📻","🎙️","⏰","⌛","📡","🔋","🔌","💡","🔦","💸","💵","💰","💳","💎","🧰","🔧","🔨","⚒️","⛏️","🔩","⚙️","🔫","💣","🧨","🔪","🗡️","⚔️","🛡️","🚬","⚰️","🏺","🔮","📿","🔭","🔬","💊","💉","🌡️","🧹","🚽","🛁","🧼","🔑","🚪","🛋️","🛏️","🖼️","🛍️","🎁","🎈","🎀","🎊","🎉","✉️","📩","📨","📧","💌","📦","🏷️","📪","📫","📬","📭","📮","📜","📃","📄","📑","📊","📈","📉","📆","📅","🗑️","📇","📋","📌","📍","📎","📏","📐","✂️","📝","✏️","💼","📁","📂"],
+  symbol: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","💟","☮️","✝️","☪️","🕉️","☸️","✡️","🔯","☯️","🛐","⛎","♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓","🆔","⚛️","☢️","☣️","📴","📳","🈶","🈚","🈸","🈺","🈷️","✴️","🆚","💮","🉐","㊙️","㊗️","🈴","🈵","🈹","🈲","🅰️","🅱️","🅾️","🆎","🆑","🆘","❌","⭕","🛑","⛔","📛","🚫","💯","💢","♨️","🚷","🚯","🚳","🚱","🔞","📵","🚭","❗","❕","❓","❔","‼️","⁉️","⚠️","🚸","🔱","⚜️","♻️","✅","💹","❇️","✳️","❎","🌐","💠","Ⓜ️","🌀","💤","🏧","🚾","♿","🅿️","0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟","🔢","#️⃣","*️⃣","⏏️","▶️","⏸️","⏯️","⏹️","⏭️","⏮️","⏩","⏪","⏫","⏬","◀️","🔼","🔽","➡️","⬅️","⬆️","⬇️","↗️","↘️","↙️","↖️","↕️","↔️","↪️","↩️","🔀","🔁","🔂","🔄","🎵","🎶","➕","➖","➗","✖️","♾️","💲","™️","©️","®️","➰","🔚","🔙","🔛","🔝","🔜","✔️","☑️","🔘","🔴","🟠","🟡","🟢","🔵","🟣","⚫","⚪","🟤","🔺","🔻","🔸","🔹","🔶","🔷","🔳","🔲","▪️","▫️","◾","◽","◼️","◻️","🟥","🟦","🟧","🟨","🟩","🟪","⬛","⬜","🟫","🔈","🔇","🔉","🔊","🔔","🔕","📣","💬","💭","♠️","♣️","♥️","♦️","🃏","🎴","🀄","🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚","🕛"],
+};
+
+function loadRecentEmojis(){
+  try{ const raw=localStorage.getItem("payam_recent_emoji"); if(raw) EMOJIS.recent=JSON.parse(raw).slice(0,40); }catch{}
+}
+function saveRecentEmoji(e){
+  let arr=EMOJIS.recent||[]; arr=arr.filter(x=>x!==e); arr.unshift(e); arr=arr.slice(0,40); EMOJIS.recent=arr; localStorage.setItem("payam_recent_emoji", JSON.stringify(arr));
+}
+loadRecentEmojis();
+
+function renderEmojiGrid(cat="recent"){
+  const grid=$("emoji-grid"); if(!grid) return;
+  grid.innerHTML="";
+  const list = cat==="recent" ? (EMOJIS.recent.length? EMOJIS.recent : EMOJIS.smile.slice(0,40)) : (EMOJIS[cat]||[]);
+  for(const em of list){
+    const b=document.createElement("button");
+    b.textContent=em; b.style.fontSize="1.4rem"; b.style.padding="6px"; b.style.borderRadius="8px"; b.style.border="none"; b.style.background="transparent"; b.style.cursor="pointer";
+    b.addEventListener("click", ()=>{
+      const input=$("input"); if(input){ const start=input.selectionStart||input.value.length; const end=input.selectionEnd||start; input.value=input.value.slice(0,start)+em+input.value.slice(end); input.selectionStart=input.selectionEnd=start+em.length; input.focus(); saveRecentEmoji(em); }
+    });
+    b.addEventListener("dblclick", ()=>{ saveRecentEmoji(em); sendMessage(); });
+    grid.appendChild(b);
+  }
+  document.querySelectorAll("#emoji-cats button").forEach(btn=>{ btn.classList.remove("active"); if(btn.dataset.cat===cat) btn.classList.add("active"); });
+}
+
+function openEmoji(){
+  const p=$("emoji-panel"); if(!p) return;
+  p.classList.remove("hidden"); renderEmojiGrid("recent");
+}
+function closeEmoji(){ $("emoji-panel")?.classList.add("hidden"); }
+
+$("btn-emoji")?.addEventListener("click", (e)=>{
+  e.stopPropagation();
+  const p=$("emoji-panel"); if(!p) return;
+  if(p.classList.contains("hidden")) openEmoji(); else closeEmoji();
+});
+$("btn-close-emoji")?.addEventListener("click", closeEmoji);
+document.getElementById("emoji-cats")?.addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return; renderEmojiGrid(b.dataset.cat);
+});
+
+// عکس پیش‌نمایش قبل ارسال — تلگرامی
+let pendingPhotoFile=null;
+function showPhotoPreview(file){
+  pendingPhotoFile=file;
+  const box=$("photo-preview"); if(!box) return;
+  const img=$("photo-preview-img"); const name=$("photo-preview-name"); const size=$("photo-preview-size");
+  if(img) img.src=URL.createObjectURL(file);
+  if(name) name.textContent=file.name;
+  if(size) size.textContent=`${(file.size/1024).toFixed(1)} KB • ${file.type||""}`;
+  const cap=$("photo-caption"); if(cap) cap.value="";
+  box.classList.remove("hidden");
+}
+function hidePhotoPreview(){
+  pendingPhotoFile=null;
+  $("photo-preview")?.classList.add("hidden");
+  const img=$("photo-preview-img"); if(img) img.src="";
+}
+$("btn-cancel-photo")?.addEventListener("click", hidePhotoPreview);
+$("btn-send-photo")?.addEventListener("click", async()=>{
+  if(!pendingPhotoFile) return;
+  const cap=$("photo-caption").value.trim();
+  const f=pendingPhotoFile;
+  hidePhotoPreview();
+  const bar=$("upload-progress"); const fill=$("upload-bar"); const txt=$("upload-text");
+  if(bar) bar.classList.remove("hidden"); if(fill) fill.style.width="10%"; if(txt) txt.textContent=`در حال آپلود ${f.name}...`;
+  try{
+    const fd=new FormData(); fd.append("file", f);
+    const h={}; if(state.token) h.Authorization="Bearer "+state.token;
+    const res=await fetch("/api/upload", {method:"POST", headers:h, body:fd});
+    const data=await res.json(); if(!res.ok) throw new Error(data.message||"خطا");
+    if(fill) fill.style.width="80%";
+    const fileInfo=data.file;
+    const temp="t"+Date.now()+Math.random().toString(36).slice(2,5);
+    const optimistic={ id:-1, sender:state.me.id, recipient:state.peer||state.me.id, text:cap||fileInfo.name, ts:Date.now(), group_id:state.group||null, file_url:fileInfo.url, file_name:fileInfo.name, file_size:fileInfo.size, mime:fileInfo.mime, msg_type:fileInfo.type, read_at:null };
+    state.msgs.push(optimistic); const el=buildBubble(optimistic); el.classList.add("pending"); $("messages").appendChild(el); state.pending.set(temp,el); scrollDown(true);
+    wsSend({ t:"msg", to:state.peer, group:state.group, text:cap||fileInfo.name, temp, file:fileInfo });
+    setTimeout(()=>{ if(state.pending.has(temp)){ const payload= state.group? {group:state.group, text:cap||fileInfo.name, file:fileInfo} : {to:state.peer, text:cap||fileInfo.name, file:fileInfo}; api("/messages",{method:"POST", body:JSON.stringify(payload)}).then(r=>{ if(!state.pending.has(temp)) return; onAck({id:r.message.id, to:state.peer, group:state.group, text:r.message.text, ts:r.message.ts, temp, file:fileInfo}); }).catch(()=>{}); } },2500);
+    if(fill) fill.style.width="100%"; setTimeout(()=>{ if(bar) bar.classList.add("hidden"); if(fill) fill.style.width="0%"; },800);
+  }catch(e){ toast("خطای آپلود: "+e.message); const b=$("upload-progress"); if(b) b.classList.add("hidden"); }
+});
+
+// اورراید fileInput برای عکس — اگر عکس باشه پیش‌نمایش بده
+(function(){
+  const fi=$("file-input");
+  if(fi){
+    // حذف لیسنر قبلی با کلون
+    const newInput=fi.cloneNode(true); fi.parentNode.replaceChild(newInput, fi);
+    const fileInputNew=$("file-input");
+    fileInputNew.addEventListener("change", async()=>{
+      const files=fileInputNew.files; if(!files||files.length===0) return;
+      if(files.length===1 && files[0].type.startsWith("image/")){
+        showPhotoPreview(files[0]);
+        fileInputNew.value="";
+        return;
+      }
+      for(const f of Array.from(files)) await uploadAndSend(f);
+      fileInputNew.value="";
+    });
+  }
+})();
+
+// کلیک بیرون پنل ایموجی ببند
+document.addEventListener("click", e=>{
+  const panel=$("emoji-panel"); const btn=$("btn-emoji");
+  if(!panel||panel.classList.contains("hidden")) return;
+  if(panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+  closeEmoji();
+});
 
 // شروع — با حریم خصوصی و بدون لاگ‌اوت علکی وقتی کروم بسته میشه
 (function boot(){
@@ -1049,24 +1178,15 @@ if(chatViewEl){
         enterApp();
       }
     }).catch(e=>{
-      // فقط اگر توکن واقعاً بی‌اعتباره لاگ‌اوت کن
       if(e.code==="unauthorized"){
         localStorage.removeItem("payam_token");
         state.token=null;
         showLogin();
       }else{
-        // نت قطعه یا سرور خواب — لاگین رو نشون نده، با همون توکن بمون و دوباره تلاش کن
         console.warn("boot /me failed, keeping token", e);
-        // سعی کن مستقیم بری تو اپ با کش، یا لاگین رو نشون بده ولی توکن رو نگه دار
-        const cachedMe = state.me;
-        if(cachedMe){
-          enterApp();
-        }else{
-          // اگه تا 3 ثانیه دیگه هم نت نیومد، لاگین رو نشون بده ولی توکن پاک نکن
-          setTimeout(()=>{
-            api("/me").then(rr=>{ state.me=rr.user; enterApp(); }).catch(()=>{ showLogin(); });
-          }, 2000);
-        }
+        setTimeout(()=>{
+          api("/me").then(rr=>{ state.me=rr.user; enterApp(); }).catch(()=>{ showLogin(); });
+        }, 2000);
       }
     });
     return;

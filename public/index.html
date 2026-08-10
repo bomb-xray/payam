@@ -161,6 +161,7 @@
         </div>
 
         <footer class="composer" id="composer">
+          <button id="btn-emoji" class="icon-btn" title="ایموجی 😊" style="font-size:1.4rem">😊</button>
           <button id="btn-attach" class="icon-btn" title="پیوست فایل/عکس/ویدیو" style="font-size:1.4rem">📎</button>
           <input type="file" id="file-input" class="hidden" multiple accept="image/*,video/*,audio/*,.gif,.pdf,.zip,.doc,.docx,.txt" />
           <div class="input-wrap">
@@ -168,6 +169,37 @@
           </div>
           <button id="btn-send" class="send-btn" title="ارسال">➤</button>
         </footer>
+
+        <!-- پنل ایموجی — شبیه تلگرام -->
+        <div id="emoji-panel" class="hidden" style="background:var(--panel); border-top:1px solid var(--border); padding:8px; max-height:42vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px">
+          <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; border-bottom:1px solid var(--border)" id="emoji-cats">
+            <button class="btn btn-ghost" data-cat="recent" style="padding:6px 10px">🕒 اخیر</button>
+            <button class="btn btn-ghost" data-cat="smile" style="padding:6px 10px">😊 احساسات</button>
+            <button class="btn btn-ghost" data-cat="gesture" style="padding:6px 10px">👋 ژست</button>
+            <button class="btn btn-ghost" data-cat="animal" style="padding:6px 10px">🐶 حیوان</button>
+            <button class="btn btn-ghost" data-cat="food" style="padding:6px 10px">🍕 غذا</button>
+            <button class="btn btn-ghost" data-cat="travel" style="padding:6px 10px">✈️ سفر</button>
+            <button class="btn btn-ghost" data-cat="object" style="padding:6px 10px">💡 اشیا</button>
+            <button class="btn btn-ghost" data-cat="symbol" style="padding:6px 10px">❤️ نماد</button>
+          </div>
+          <div id="emoji-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(36px,1fr)); gap:4px; padding:4px"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border)">
+            <span class="dim" style="font-size:0.75rem">کلیک کن تا به پیام اضافه شه — دوبار کلیک = ارسال سریع</span>
+            <button id="btn-close-emoji" class="icon-btn">✕</button>
+          </div>
+        </div>
+
+        <!-- پیش‌نمایش عکس قبل ارسال — مثل تلگرام -->
+        <div id="photo-preview" class="hidden" style="background:var(--panel-2); border-top:1px solid var(--border); padding:10px 12px; display:flex; gap:10px; align-items:center">
+          <img id="photo-preview-img" src="" style="width:56px; height:56px; border-radius:12px; object-fit:cover; border:1px solid var(--border-2)" />
+          <div style="flex:1; min-width:0">
+            <div id="photo-preview-name" style="font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">عکس.jpg</div>
+            <div id="photo-preview-size" class="dim" style="font-size:0.75rem">—</div>
+            <input id="photo-caption" placeholder="کپشن (اختیاری)..." style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; background:var(--bg); border:1px solid var(--border-2); color:var(--text); font-size:0.85rem" />
+          </div>
+          <button id="btn-cancel-photo" class="icon-btn" style="font-size:1.2rem">✕</button>
+          <button id="btn-send-photo" class="btn btn-primary" style="padding:10px 14px">ارسال</button>
+        </div>
         <div id="readonly-bar" class="hidden" style="padding:12px; text-align:center; background:var(--panel); border-top:1px solid var(--border); color:var(--dim); font-size:0.85rem">🔒 فقط ادمین‌های کانال می‌توانند پیام بفرستند</div>
         <div id="upload-progress" class="hidden" style="padding:6px 14%; background:var(--panel-2); border-top:1px solid var(--border); font-size:0.8rem; color:var(--dim)"><div style="display:flex; align-items:center; gap:8px"><div class="storage-bar" style="flex:1"><div id="upload-bar" class="storage-fill" style="width:0%"></div></div><span id="upload-text">آپلود...</span></div></div>
       </div>
